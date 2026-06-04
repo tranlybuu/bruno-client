@@ -2,12 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const chalk = require('chalk');
+const os = require('os');
 const { forOwn, cloneDeep } = require('lodash');
 const { getRunnerSummary } = require('@usebruno/common/runner');
 const { runSingleRequest } = require('../runner/run-single-request');
 const { getEnvVars, getOptions } = require('../utils/bru');
 const { parseEnvironmentJson } = require('../utils/environment');
-const { parseDotEnv, parseEnvironment, parseRequest } = require('@usebruno/filestore');
+const { parseDotEnv, parseEnvironment, parseRequest, stringifyRequest } = require('@usebruno/filestore');
 const { getSystemProxy } = require('@usebruno/requests');
 const { exists, isDirectory } = require('../utils/filesystem');
 const { getCollectionFormat, findItemInCollection, createCollectionJsonFromPathname, getCallStack, FORMAT_CONFIG } = require('../utils/collection');
@@ -244,8 +245,102 @@ function findCollections(dir, maxDepth = 4, currentDepth = 0) {
   return results;
 }
 
+// Helpers for Session History Tracking
+const getHistoryDir = () => {
+  const dir = path.join(os.homedir(), '.bruno', 'mcp-history');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+};
+
+const saveSession = (sessionData) => {
+  const dir = getHistoryDir();
+  fs.writeFileSync(path.join(dir, `${sessionData.sessionId}.json`), JSON.stringify(sessionData, null, 2), 'utf8');
+};
+
+// Helper to build a .bru file representation from custom options
+function buildBruContent(request) {
+  const { method = 'GET', url, headers = {}, params = {}, body = {} } = request;
+
+  // Convert headers object to Bruno array format
+  const brunoHeaders = [];
+  if (headers && typeof headers === 'object') {
+    for (const [name, value] of Object.entries(headers)) {
+      brunoHeaders.push({ name, value, enabled: true });
+    }
+  }
+
+  // Convert query params object to Bruno array format
+  const brunoParams = [];
+  if (params && typeof params === 'object') {
+    for (const [name, value] of Object.entries(params)) {
+      brunoParams.push({ name, value, enabled: true });
+    }
+  }
+
+  let bodyMode = 'none';
+  let bodyJson = '{}';
+  let bodyText = '';
+  if (body && body.mode) {
+    bodyMode = body.mode;
+    if (bodyMode === 'json') {
+      bodyJson = typeof body.content === 'object' ? JSON.stringify(body.content, null, 2) : String(body.content || '{}');
+    } else {
+      bodyText = String(body.content || '');
+    }
+  }
+
+  const brunoRequestObj = {
+    type: 'http-request',
+    name: 'temp-request',
+    seq: 1,
+    request: {
+      method: method.toUpperCase(),
+      url,
+      headers: brunoHeaders,
+      params: brunoParams,
+      auth: { mode: 'none' },
+      body: {
+        mode: bodyMode,
+        json: bodyJson,
+        text: bodyText
+      }
+    }
+  };
+
+  return stringifyRequest(brunoRequestObj, { format: 'bru' });
+}
+
+// Clean up any orphaned temp directories from previous crashed/killed sessions on startup
+function cleanOldTempDirs() {
+  try {
+    const tmpDir = os.tmpdir();
+    const files = fs.readdirSync(tmpDir);
+    for (const file of files) {
+      if (file.startsWith('bruno-mcp-test-')) {
+        const fullPath = path.join(tmpDir, file);
+        try {
+          if (fs.rmSync) {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+          } else if (fs.rmdirSync) {
+            fs.rmdirSync(fullPath, { recursive: true });
+          }
+        } catch (err) {
+          // Ignore
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore
+  }
+}
+
 // Start MCP server over stdio
 const handler = async (argv) => {
+  // Clean up any old left-overs first
+  cleanOldTempDirs();
+
   // Use yargs settings for default options
   const options = getOptions();
   if (argv.insecure) {
@@ -335,30 +430,30 @@ const handler = async (argv) => {
           tools: [
             {
               name: 'list_collections',
-              description: 'Recursively search for Bruno collections from the current directory. Returns a list of collections with their names and paths.',
+              description: 'Recursively search for Bruno collections from a base directory. Returns a list of collections with their names and paths. Use this tool first to discover the available collections and their exact paths in your workspace.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   path: {
                     type: 'string',
-                    description: 'Base directory path to start search. Defaults to current working directory.'
+                    description: 'The base directory path to start searching from. Defaults to the current working directory (cwd) if not specified.'
                   }
                 }
               }
             },
             {
               name: 'list_collection_items',
-              description: 'Lists folders, requests (.bru files), and environments inside a specified Bruno collection or subdirectory.',
+              description: 'Lists all folders, API request files (.bru), and environments inside a specified Bruno collection or its subdirectories. Use this tool to explore the structure of a collection, locate request paths, and find valid environments.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   collectionPath: {
                     type: 'string',
-                    description: 'Absolute or relative path to the Bruno collection directory.'
+                    description: 'The absolute or relative path to the root directory of the Bruno collection (e.g. "./packages/bruno-tests/collection").'
                   },
                   folderPath: {
                     type: 'string',
-                    description: 'Relative path of the folder to list inside the collection (optional).'
+                    description: 'Optional relative path of the folder to list inside the collection (e.g. "auth" or "API/v1"). Omit or leave empty to list items at the root of the collection.'
                   }
                 },
                 required: ['collectionPath']
@@ -366,17 +461,17 @@ const handler = async (argv) => {
             },
             {
               name: 'get_request_details',
-              description: 'Get details of a single API request (.bru) in a collection, including its method, URL, headers, query parameters, variables, body, and scripts.',
+              description: 'Retrieves the parsed structure of a single API request (.bru) file, containing its HTTP method, target URL, query parameters, headers, variables, script pre-requests/post-responses, assertions, and test specifications. Use this to understand a request before executing it.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   collectionPath: {
                     type: 'string',
-                    description: 'Absolute or relative path to the Bruno collection directory.'
+                    description: 'The absolute or relative path to the root directory of the Bruno collection.'
                   },
                   requestPath: {
                     type: 'string',
-                    description: 'Relative path of the request file in the collection (e.g. "API/auth/login.bru").'
+                    description: 'The relative path of the request file within the collection (e.g. "echo/echo json.bru"). Must end with ".bru".'
                   }
                 },
                 required: ['collectionPath', 'requestPath']
@@ -384,29 +479,29 @@ const handler = async (argv) => {
             },
             {
               name: 'run_request',
-              description: 'Run a single API request (.bru) in a specified Bruno collection.',
+              description: 'Runs/executes a single API request (.bru) in a specified Bruno collection. Returns full details of the request sent, response headers/status/body, scripting logs, assertion reports, and test execution results. Automatically generates a sessionId for session tracking.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   collectionPath: {
                     type: 'string',
-                    description: 'Absolute or relative path to the Bruno collection directory.'
+                    description: 'The absolute or relative path to the root directory of the Bruno collection.'
                   },
                   requestPath: {
                     type: 'string',
-                    description: 'Relative path of the request file in the collection (e.g. "API/auth/login.bru").'
+                    description: 'The relative path of the request file in the collection (e.g. "echo/echo json.bru"). Must end with ".bru".'
                   },
                   env: {
                     type: 'string',
-                    description: 'Name of the environment to use (optional)'
+                    description: 'Optional name of the collection environment to load variables from (e.g. "Local", "Prod"). Find available environments by running list_collection_items.'
                   },
                   envVars: {
                     type: 'object',
-                    description: 'Key-value pairs to override/set environment variables (optional)'
+                    description: 'Optional key-value pairs of environment variable overrides to apply to this request execution.'
                   },
                   globalEnv: {
                     type: 'string',
-                    description: 'Global environment name (optional)'
+                    description: 'Optional global environment name to load workspace-level global environments.'
                   }
                 },
                 required: ['collectionPath', 'requestPath']
@@ -414,17 +509,17 @@ const handler = async (argv) => {
             },
             {
               name: 'run_folder',
-              description: 'Run all requests in a folder (equivalent to Collection Runner) in a specified Bruno collection.',
+              description: 'Executes all API requests inside a specified collection folder (equivalent to Collection Runner). Returns a summary of execution and full details of the request/response payloads, headers, bodies, assertions, and tests for every executed API. Automatically generates a sessionId.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   collectionPath: {
                     type: 'string',
-                    description: 'Absolute or relative path to the Bruno collection directory.'
+                    description: 'The absolute or relative path to the root directory of the Bruno collection.'
                   },
                   folderPath: {
                     type: 'string',
-                    description: 'Relative path to the folder. Use "." or leave blank to run the entire collection.'
+                    description: 'Relative path of the folder containing requests to execute. Use "." or omit to run the entire collection.'
                   },
                   recursive: {
                     type: 'boolean',
@@ -432,22 +527,93 @@ const handler = async (argv) => {
                   },
                   env: {
                     type: 'string',
-                    description: 'Name of the environment to use (optional)'
+                    description: 'Optional name of the collection environment to load variables from.'
                   },
                   envVars: {
                     type: 'object',
-                    description: 'Key-value pairs to override/set environment variables (optional)'
+                    description: 'Optional key-value pairs of environment variable overrides to apply.'
                   },
                   globalEnv: {
                     type: 'string',
-                    description: 'Global environment name (optional)'
+                    description: 'Optional global environment name to load.'
                   },
                   delay: {
                     type: 'number',
-                    description: 'Delay in milliseconds between requests (optional)'
+                    description: 'Optional delay in milliseconds to wait between running each request.'
                   }
                 },
                 required: ['collectionPath']
+              }
+            },
+            {
+              name: 'list_sessions',
+              description: 'Lists summaries of recent request/folder executions (history). Each summary contains the sessionId, timestamp, collection path, environment, and requests passed/failed counts.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  limit: {
+                    type: 'number',
+                    description: 'Maximum number of recent session history items to return. Defaults to 20.'
+                  }
+                }
+              }
+            },
+            {
+              name: 'get_session',
+              description: 'Retrieves the complete, raw execution log file of a previous request or folder runner session. Returns detailed request and response headers, status, bodies, test results, and assertions for all APIs executed in that session.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  sessionId: {
+                    type: 'string',
+                    description: 'Unique session identifier (e.g. "session_1780556017486_l6s7c70").'
+                  }
+                },
+                required: ['sessionId']
+              }
+            },
+            {
+              name: 'test_api',
+              description: 'Call/test any arbitrary API/URL directly using Bruno\'s HTTP runner. Use this tool instead of curl or custom scripts to fetch or test third-party endpoints. It runs within a temporary sandbox and automatically cleans up afterwards without logging history.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  url: {
+                    type: 'string',
+                    description: 'The target API endpoint URL (e.g. "https://httpbin.org/post").'
+                  },
+                  method: {
+                    type: 'string',
+                    description: 'The HTTP method (e.g. "GET", "POST", "PUT", "DELETE"). Defaults to "GET".'
+                  },
+                  headers: {
+                    type: 'object',
+                    description: 'Key-value pairs of request headers (e.g. {"Content-Type": "application/json"}).'
+                  },
+                  params: {
+                    type: 'object',
+                    description: 'Key-value pairs of URL query parameters (e.g. {"id": "123"}).'
+                  },
+                  body: {
+                    type: 'object',
+                    description: 'The request body configuration (optional).',
+                    properties: {
+                      mode: {
+                        type: 'string',
+                        description: 'The request body format: "json", "text", "xml", "form-url-encoded". Defaults to "none".'
+                      },
+                      content: {
+                        type: 'string',
+                        description: 'The raw string content or serialized object of the body payload.'
+                      }
+                    }
+                  },
+                  envVars: {
+                    type: 'object',
+                    description: 'Optional environment variables to inject for variable resolution inside the request.'
+                  }
+                },
+                required: ['url', 'method']
               }
             }
           ]
@@ -471,6 +637,12 @@ const handler = async (argv) => {
           result = await handleRunRequest(args);
         } else if (name === 'run_folder') {
           result = await handleRunFolder(args);
+        } else if (name === 'list_sessions') {
+          result = await handleListSessions(args);
+        } else if (name === 'get_session') {
+          result = await handleGetSession(args);
+        } else if (name === 'test_api') {
+          result = await handleTestApi(args);
         } else {
           sendJsonRpc({
             jsonrpc: '2.0',
@@ -741,7 +913,44 @@ const handler = async (argv) => {
       );
     } finally {
       const logs = stopIntercepting();
-      const outputText = formatOutput(result, logs);
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      const sessionData = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        collectionPath: resolvedCollectionPath,
+        type: 'request',
+        requestPath,
+        env,
+        results: [
+          {
+            name: item.name,
+            path: requestPath,
+            request: result?.request ? {
+              method: result.request.method,
+              url: result.request.url,
+              headers: result.request.headers,
+              body: result.request.body
+            } : null,
+            response: result?.response && result.response.status !== 'skipped' && result.response.status !== 'error' ? {
+              status: result.response.status,
+              statusText: result.response.statusText,
+              responseTime: result.response.responseTime,
+              headers: result.response.headers,
+              data: result.response.data
+            } : null,
+            error: result?.error,
+            assertionResults: result?.assertionResults || [],
+            testResults: result?.testResults || [],
+            status: result?.response?.status || 'error'
+          }
+        ]
+      };
+      saveSession(sessionData);
+
+      const outputText = `=== Session ID: ${sessionId} ===
+        ` + formatOutput(result, logs);
+
       return {
         content: [
           {
@@ -881,7 +1090,68 @@ const handler = async (argv) => {
       const logs = stopIntercepting();
       const summary = getRunnerSummary(results);
 
-      const outputText = `=== Runner Executed ${results.length} requests ===
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const sessionData = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        collectionPath: resolvedCollectionPath,
+        type: 'folder',
+        folderPath,
+        env,
+        results: results.map((r) => ({
+          name: r.name,
+          path: r.path,
+          request: r.request ? {
+            method: r.request.method,
+            url: r.request.url,
+            headers: r.request.headers,
+            body: r.request.body
+          } : null,
+          response: r.response && r.response.status !== 'skipped' && r.response.status !== 'error' ? {
+            status: r.response.status,
+            statusText: r.response.statusText,
+            responseTime: r.response.responseTime,
+            headers: r.response.headers,
+            data: r.response.data
+          } : null,
+          error: r.error,
+          assertionResults: r.assertionResults || [],
+          testResults: r.testResults || [],
+          status: r.response?.status || 'error'
+        }))
+      };
+      saveSession(sessionData);
+
+      const detailedResultsText = results.map((r) => {
+        const reqStr = r.request ? `${r.request.method} ${r.request.url}` : 'N/A';
+        const resStr = r.response && r.response.status !== 'skipped' && r.response.status !== 'error'
+          ? `${r.response.status} ${r.response.statusText} (${r.response.responseTime}ms)`
+          : `Response status: ${r.response?.status || 'N/A'}`;
+        const asserts = (r.assertionResults || []).map((a) => `${a.status === 'pass' ? '✓' : '✕'} ${a.lhsExpr} ${a.rhsExpr}`).join('\n');
+        const tests = (r.testResults || []).map((t) => `${t.status === 'pass' ? '✓' : '✕'} ${t.description}`).join('\n');
+        let bodyStr = '';
+        if (r.response?.data) {
+          try {
+            bodyStr = typeof r.response.data === 'object' ? JSON.stringify(r.response.data, null, 2) : String(r.response.data);
+          } catch (_) {
+            bodyStr = String(r.response.data);
+          }
+        }
+        return `--- Request: ${r.name} ---
+Path: ${r.path}
+Request: ${reqStr}
+Response: ${resStr}
+Assertions:
+${asserts || 'None'}
+Tests:
+${tests || 'None'}
+${r.error ? `Error: ${r.error}\n` : ''}
+Response Body:
+${bodyStr || 'Empty'}`;
+      }).join('\n\n');
+
+      const outputText = `=== Session ID: ${sessionId} ===
+=== Runner Executed ${results.length} requests ===
 Summary:
 - Total Requests: ${summary.totalRequests}
 - Passed: ${summary.passedRequests}
@@ -894,13 +1164,8 @@ Assertions:
 - Passed: ${summary.passedAssertions}
 - Failed: ${summary.failedAssertions}
 
-Tests:
-- Total: ${summary.totalTests}
-- Passed: ${summary.passedTests}
-- Failed: ${summary.failedTests}
-
-=== Detailed Results ===
-${results.map((r) => `[${r.name}] ${r.response?.status || 'Error'} (${r.response?.responseTime || 0}ms)`).join('\n')}
+=== Detailed API Execution Results ===
+${detailedResultsText}
 
 === Terminal Logs ===
 ${logs}`;
@@ -914,6 +1179,173 @@ ${logs}`;
         ],
         isError: summary.failedRequests > 0 || summary.errorRequests > 0
       };
+    }
+  }
+
+  // Handle tool: list_sessions
+  async function handleListSessions(args) {
+    const { limit = 20 } = args || {};
+    const dir = getHistoryDir();
+    if (!fs.existsSync(dir)) {
+      return {
+        content: [{ type: 'text', text: '[]' }]
+      };
+    }
+
+    const files = fs.readdirSync(dir);
+    const sessions = [];
+
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        try {
+          const content = fs.readFileSync(path.join(dir, file), 'utf8');
+          const data = JSON.parse(content);
+          const totalRequests = data.results?.length || 0;
+          const passed = data.results?.filter((r) => r.response?.status === 200 || r.status === 'pass' || (r.assertionResults && r.assertionResults.every((a) => a.status === 'pass') && r.testResults && r.testResults.every((t) => t.status === 'pass'))).length || 0;
+
+          sessions.push({
+            sessionId: data.sessionId,
+            timestamp: data.timestamp,
+            collectionPath: data.collectionPath,
+            type: data.type || 'folder',
+            folderPath: data.folderPath,
+            requestPath: data.requestPath,
+            env: data.env,
+            summary: {
+              totalRequests,
+              passed,
+              failed: totalRequests - passed
+            }
+          });
+        } catch (err) {
+          // Skip corrupt files
+        }
+      }
+    }
+
+    sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(sessions.slice(0, limit), null, 2)
+        }
+      ]
+    };
+  }
+
+  // Handle tool: get_session
+  async function handleGetSession(args) {
+    const { sessionId } = args;
+    if (!sessionId) {
+      throw new Error('Argument "sessionId" is required.');
+    }
+
+    const dir = getHistoryDir();
+    const filePath = path.join(dir, `${sessionId}.json`);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content
+        }
+      ]
+    };
+  }
+
+  // Handle tool: test_api
+  async function handleTestApi(args) {
+    const { url, method = 'GET', headers = {}, params = {}, body = {}, envVars = {} } = args;
+    if (!url) {
+      throw new Error('Argument "url" is required.');
+    }
+
+    const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'bruno-mcp-test-'));
+    try {
+      const brunoJson = {
+        version: '1',
+        name: 'Temp MCP Test Collection',
+        type: 'collection',
+        ignore: ['node_modules', '.git']
+      };
+      fs.writeFileSync(path.join(tempDir, 'bruno.json'), JSON.stringify(brunoJson, null, 2), 'utf8');
+
+      const bruContent = buildBruContent({ method, url, headers, params, body });
+      const requestFilename = 'request.bru';
+      const requestPath = path.join(tempDir, requestFilename);
+      fs.writeFileSync(requestPath, bruContent, 'utf8');
+
+      const collection = createCollectionJsonFromPathname(tempDir);
+      const item = findItemInCollection(collection, requestPath);
+      if (!item) {
+        throw new Error('Failed to create/locate temporary request item.');
+      }
+
+      const resolvedEnvVars = {};
+      if (envVars && typeof envVars === 'object') {
+        for (const [key, value] of Object.entries(envVars)) {
+          resolvedEnvVars[key] = String(value);
+        }
+      }
+      const processEnvVars = { ...process.env };
+      const globalEnvVars = {};
+
+      const runtimeVariables = {};
+      const brunoConfig = collection.brunoConfig;
+      const collectionRoot = collection.root;
+      const runtime = 'quickjs';
+
+      const runSingleRequestByPathname = async (relativeItemPathname) => {
+        throw new Error('Nested request runs are not supported in test_api.');
+      };
+
+      startIntercepting();
+
+      let result;
+      try {
+        result = await runSingleRequest(
+          item,
+          tempDir,
+          runtimeVariables,
+          resolvedEnvVars,
+          processEnvVars,
+          brunoConfig,
+          collectionRoot,
+          runtime,
+          collection,
+          runSingleRequestByPathname,
+          globalEnvVars
+        );
+      } finally {
+        const logs = stopIntercepting();
+        const outputText = formatOutput(result, logs);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: outputText
+            }
+          ],
+          isError: result?.status === 'error' || result?.response?.status === 'skipped'
+        };
+      }
+    } finally {
+      try {
+        if (fs.rmSync) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } else if (fs.rmdirSync) {
+          fs.rmdirSync(tempDir, { recursive: true });
+        }
+      } catch (err) {
+        // Ignore
+      }
     }
   }
 

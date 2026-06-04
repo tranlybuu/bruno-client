@@ -16,6 +16,7 @@ if (isDev) {
 
 const { format } = require('url');
 const { BrowserWindow, app, session, Menu, globalShortcut, ipcMain, nativeTheme } = require('electron');
+app.setName('Bruno');
 const { setContentSecurityPolicy } = require('electron-util');
 
 if (isDev && process.env.ELECTRON_USER_DATA_PATH) {
@@ -182,6 +183,17 @@ if (useSingleInstance && !gotTheLock) {
 // Prepare the renderer once the app is ready
 app.on('ready', async () => {
   initializeShellEnv();
+
+  if (process.platform === 'darwin') {
+    try {
+      const iconPath = path.join(__dirname, 'about/256x256.png');
+      if (fs.existsSync(iconPath)) {
+        app.dock.setIcon(iconPath);
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }
 
   if (isDev) {
     // DevTools extensions are disabled to prevent prompt permissions/warnings
