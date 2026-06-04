@@ -11,6 +11,7 @@ import { findItemInCollection, findItemInCollectionByPathname, areItemsLoading }
 import { cancelRequest, sendRequest } from 'providers/ReduxStore/slices/collections/actions';
 import { updateGqlDocsOpen } from 'providers/ReduxStore/slices/tabs';
 import RequestNotFound from './RequestNotFound';
+import PlainFileEditor from 'components/PlainFileEditor';
 import QueryUrl from 'components/RequestPane/QueryUrl/index';
 import GrpcQueryUrl from 'components/RequestPane/GrpcQueryUrl/index';
 import NetworkError from 'components/ResponsePane/NetworkError';
@@ -424,6 +425,10 @@ const RequestTabPanel = () => {
     return showLoading
       ? <RequestTabPanelLoading name={focusedTab.name} />
       : <RequestNotFound itemUid={activeTabUid} />;
+  }
+
+  if (item.type === 'file') {
+    return <PlainFileEditor item={item} collection={collection} />;
   }
 
   if (item.partial) {

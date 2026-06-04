@@ -495,6 +495,13 @@ export const tabsSlice = createSlice({
 
       state.tabs.push(tab);
       state.activeTabUid = tab.uid;
+    },
+    setExecutedInTab: (state, action) => {
+      const { uid } = action.payload;
+      const tab = find(state.tabs, (t) => t.uid === uid);
+      if (tab) {
+        tab.executedInTab = true;
+      }
     }
   }
 });
@@ -527,6 +534,7 @@ export const {
   syncTabUid,
   restoreTabs,
   reopenLastClosedTab,
+  setExecutedInTab,
   updateQueryBuilderOpen,
   updateQueryBuilderWidth,
   updateVariablesPaneOpen,

@@ -419,6 +419,67 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
     }
   });
 
+  // read file content
+  ipcMain.handle('renderer:read-file-content', async (event, { pathname }) => {
+    try {
+      validatePathIsInsideCollection(pathname);
+      return fs.readFileSync(pathname, 'utf8');
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
+
+  // write file content
+  ipcMain.handle('renderer:write-file-content', async (event, { pathname, content }) => {
+    try {
+      validatePathIsInsideCollection(pathname);
+      fs.writeFileSync(pathname, content, 'utf8');
+      return { success: true };
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
+
+  // read history
+  ipcMain.handle('renderer:read-history', async (event, { collectionPath }) => {
+    try {
+      const historyPath = path.join(collectionPath, '.bruno', 'history.json');
+      if (!fs.existsSync(historyPath)) {
+        return {};
+      }
+      const data = fs.readFileSync(historyPath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      return {};
+    }
+  });
+
+  // write history
+  ipcMain.handle('renderer:write-history', async (event, { collectionPath, history }) => {
+    try {
+      const brunoDir = path.join(collectionPath, '.bruno');
+      if (!fs.existsSync(brunoDir)) {
+        fs.mkdirSync(brunoDir, { recursive: true });
+      }
+      const historyPath = path.join(brunoDir, 'history.json');
+      fs.writeFileSync(historyPath, JSON.stringify(history, null, 2), 'utf8');
+
+      // Add to .gitignore if not present
+      const gitignorePath = path.join(collectionPath, '.gitignore');
+      let gitignoreContent = '';
+      if (fs.existsSync(gitignorePath)) {
+        gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
+      }
+      if (!gitignoreContent.includes('.bruno/history.json')) {
+        const lineEnd = gitignoreContent.endsWith('\n') || gitignoreContent === '' ? '' : '\n';
+        fs.writeFileSync(gitignorePath, gitignoreContent + lineEnd + '.bruno/history.json\n', 'utf8');
+      }
+      return { success: true };
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
+
   ipcMain.handle('renderer:save-transient-request', async (event, { sourcePathname, targetDirname, targetFilename, request, format, sourceFormat }) => {
     try {
       if (!fs.existsSync(sourcePathname)) {

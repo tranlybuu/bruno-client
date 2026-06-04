@@ -2,6 +2,13 @@ const crypto = require('crypto');
 const { machineIdSync } = require('@usebruno/node-machine-id');
 const { safeStorage } = require('electron');
 
+let isDev = false;
+try {
+  isDev = require('electron-is-dev');
+} catch (e) {}
+
+const disableSafeStorage = isDev || process.env.NODE_ENV === 'test' || process.env.DISABLE_SAFESTORAGE === 'true';
+
 // Constants for algorithm identification
 const ELECTRONSAFESTORAGE_ALGO = '00';
 const AES256_ALGO = '01';
@@ -117,7 +124,7 @@ function encryptString(str, passkey = null) {
     }
   }
 
-  if (safeStorage && safeStorage.isEncryptionAvailable()) {
+  if (!disableSafeStorage && safeStorage && safeStorage.isEncryptionAvailable()) {
     const encryptedString = safeStorageEncrypt(str);
     return `$${ELECTRONSAFESTORAGE_ALGO}:${encryptedString}`;
   }
@@ -150,7 +157,7 @@ function decryptString(str, passkey = null) {
   }
 
   if (algo === ELECTRONSAFESTORAGE_ALGO) {
-    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+    if (!disableSafeStorage && safeStorage && safeStorage.isEncryptionAvailable()) {
       return safeStorageDecrypt(encryptedString);
     } else {
       return '';

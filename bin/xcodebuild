@@ -1,0 +1,8 @@
+#!/bin/bash
+if [[ "$1" == "-version" ]]; then
+  echo "Xcode 15.0"
+  echo "Build version 15A240d"
+  exit 0
+fi
+# Fallback to the system xcodebuild for other calls (though it will fail similarly)
+exec /usr/bin/xcodebuild "$@"

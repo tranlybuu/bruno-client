@@ -880,7 +880,7 @@ export const deleteItemInCollectionByPathname = (pathname, collection) => {
 };
 
 export const isItemARequest = (item) => {
-  return item.hasOwnProperty('request') && ['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item.type) && !item.items;
+  return (item.hasOwnProperty('request') && ['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item.type) && !item.items) || item.type === 'file';
 };
 
 export const isItemAFolder = (item) => {
@@ -1069,6 +1069,10 @@ export const areItemsTheSameExceptSeqUpdate = (_item1, _item2) => {
 export const hasRequestChanges = (item) => {
   if (!item || !item.draft) {
     return false;
+  }
+
+  if (item.type === 'file') {
+    return item.draft.fileContent !== item.fileContent;
   }
 
   // Create copies of the item and draft without examples for comparison

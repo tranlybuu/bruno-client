@@ -1,5 +1,5 @@
 import RequestMethod from '../RequestMethod';
-import { IconLoader2, IconAlertTriangle, IconAlertCircle } from '@tabler/icons';
+import { IconLoader2, IconAlertTriangle, IconAlertCircle, IconFile } from '@tabler/icons';
 import StyledWrapper from './StyledWrapper';
 
 const CollectionItemIcon = ({ item }) => {
@@ -13,6 +13,10 @@ const CollectionItemIcon = ({ item }) => {
 
   if (item?.partial) {
     return <StyledWrapper><IconAlertTriangle size={18} className="w-fit mr-2 partial" strokeWidth={1.5} /></StyledWrapper>;
+  }
+
+  if (item?.type === 'file') {
+    return <IconFile className="w-fit mr-2" size={18} strokeWidth={1.5} />;
   }
 
   return <RequestMethod item={item} />;

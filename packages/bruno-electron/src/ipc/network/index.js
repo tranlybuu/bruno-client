@@ -921,7 +921,8 @@ const registerNetworkIpc = (mainWindow) => {
             statusText: 'REQUEST_CANCELLED',
             isCancel: true,
             error: 'REQUEST_CANCELLED',
-            timeline: error.timeline
+            timeline: error.timeline,
+            requestSent
           };
         }
         if (error?.response) {
@@ -943,7 +944,8 @@ const registerNetworkIpc = (mainWindow) => {
           return {
             statusText: error.statusText,
             error: error.message || ERROR_OCCURRED_WHILE_EXECUTING_REQUEST,
-            timeline: error.timeline
+            timeline: error.timeline,
+            requestSent
           };
         }
       }

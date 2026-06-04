@@ -60,7 +60,6 @@ const { cookiesStore } = require('./store/cookies');
 const SystemMonitor = require('./app/system-monitor');
 const { getIsRunningInRosetta } = require('./utils/arch');
 const { handleAppProtocolUrl, getAppProtocolUrlFromArgv } = require('./utils/deeplink');
-
 const systemMonitor = new SystemMonitor();
 const terminalManager = new TerminalManager();
 
@@ -185,6 +184,8 @@ app.on('ready', async () => {
   initializeShellEnv();
 
   if (isDev) {
+    // DevTools extensions are disabled to prevent prompt permissions/warnings
+    /*
     const { installExtension, REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
     try {
       const extensions = await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS], {
@@ -199,6 +200,7 @@ app.on('ready', async () => {
     } catch (err) {
       console.error('An error occurred while loading extensions: ', err);
     }
+    */
   }
 
   // Initialize system proxy cache early (non-blocking)

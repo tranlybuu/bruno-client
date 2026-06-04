@@ -217,6 +217,7 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
     } catch (err) {
       console.error(err);
     }
+    return;
   }
 
   if (isEnvironmentsFolder(pathname, collectionPath)) {
@@ -295,6 +296,10 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
       console.error(err);
       return;
     }
+  }
+
+  if (path.basename(pathname).startsWith('.')) {
+    return;
   }
 
   const format = getCollectionFormat(collectionPath);
@@ -379,6 +384,20 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
     } finally {
       watcher.markFileAsProcessed(win, collectionUid, pathname);
     }
+  } else {
+    const file = {
+      meta: {
+        collectionUid,
+        pathname,
+        name: path.basename(pathname)
+      },
+      data: {
+        uid: getRequestUid(pathname),
+        name: path.basename(pathname),
+        type: 'file'
+      }
+    };
+    win.webContents.send('main:collection-tree-updated', 'addFile', file);
   }
 };
 
@@ -548,6 +567,27 @@ const change = async (win, pathname, collectionUid, collectionPath) => {
     } catch (err) {
       console.error(err);
     }
+  } else {
+    if (path.basename(pathname).startsWith('.')) {
+      return;
+    }
+    try {
+      const file = {
+        meta: {
+          collectionUid,
+          pathname,
+          name: path.basename(pathname)
+        },
+        data: {
+          uid: getRequestUid(pathname),
+          name: path.basename(pathname),
+          type: 'file'
+        }
+      };
+      win.webContents.send('main:collection-tree-updated', 'change', file);
+    } catch (err) {
+      console.error(err);
+    }
   }
 };
 
@@ -560,6 +600,13 @@ const unlink = (win, pathname, collectionUid, collectionPath) => {
 
     if (isEnvironmentsFolder(pathname, collectionPath)) {
       return unlinkEnvironmentFile(win, pathname, collectionUid);
+    }
+
+    if (isBrunoConfigFile(pathname, collectionPath)) {
+      return;
+    }
+    if (path.basename(pathname).startsWith('.')) {
+      return;
     }
 
     let format;
@@ -582,6 +629,15 @@ const unlink = (win, pathname, collectionUid, collectionPath) => {
           collectionUid,
           pathname,
           name: basename
+        }
+      };
+      win.webContents.send('main:collection-tree-updated', 'unlink', file);
+    } else {
+      const file = {
+        meta: {
+          collectionUid,
+          pathname,
+          name: path.basename(pathname)
         }
       };
       win.webContents.send('main:collection-tree-updated', 'unlink', file);
@@ -654,6 +710,63 @@ class CollectionWatcher {
     this.watchers = {};
     this.loadingStates = {};
     this.tempDirectoryMap = {};
+
+    // Periodic history cleanup of deleted API session histories (5s after startup, then every 10 minutes)
+    setTimeout(() => {
+      this.cleanupDeletedApiHistories();
+    }, 5000);
+
+    setInterval(() => {
+      this.cleanupDeletedApiHistories();
+    }, 10 * 60 * 1000);
+  }
+
+  cleanupDeletedApiHistories() {
+    try {
+      const { BrowserWindow } = require('electron');
+      const watcherPaths = this.getAllWatcherPaths();
+      if (!watcherPaths || watcherPaths.length === 0) return;
+
+      watcherPaths.forEach((collectionPath) => {
+        try {
+          const historyPath = path.join(collectionPath, '.bruno', 'history.json');
+          if (!fs.existsSync(historyPath)) return;
+
+          const data = fs.readFileSync(historyPath, 'utf8');
+          let history = JSON.parse(data);
+          if (!history || typeof history !== 'object' || Array.isArray(history)) return;
+
+          let historyChanged = false;
+          for (const relativePath of Object.keys(history)) {
+            const fileAbsolutePath = path.join(collectionPath, relativePath);
+            if (!fs.existsSync(fileAbsolutePath)) {
+              delete history[relativePath];
+              historyChanged = true;
+              console.log(`[History Cleanup] Removed stale history for deleted API: ${relativePath} in collection: ${collectionPath}`);
+            }
+          }
+
+          if (historyChanged) {
+            fs.writeFileSync(historyPath, JSON.stringify(history, null, 2), 'utf8');
+
+            // Notify renderer windows
+            const windows = BrowserWindow.getAllWindows();
+            windows.forEach((win) => {
+              if (win && !win.isDestroyed() && win.webContents) {
+                win.webContents.send('main:collection-history-updated', {
+                  collectionPath,
+                  history
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error(`[History Cleanup] Error cleaning up history for collection ${collectionPath}:`, err);
+        }
+      });
+    } catch (err) {
+      console.error('[History Cleanup] Global error in cleanupDeletedApiHistories:', err);
+    }
   }
 
   // Initialize loading state tracking for a collection

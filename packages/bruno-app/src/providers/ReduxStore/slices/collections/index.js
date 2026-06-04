@@ -2,6 +2,7 @@ import { parseQueryParams, buildQueryString as stringifyQueryParams } from '@use
 import { uuid } from 'utils/common';
 import { find, map, forOwn, concat, filter, each, cloneDeep, get, set, findIndex } from 'lodash';
 import { createSlice } from '@reduxjs/toolkit';
+import { interpolate, interpolateObject } from '@usebruno/common';
 import { hexy as hexdump } from 'hexy';
 import {
   addDepth,
@@ -15,13 +16,14 @@ import {
   findItemInCollection,
   findItemInCollectionByPathname,
   isItemAFolder,
-  isItemARequest
+  isItemARequest,
+  getAllVariables
 } from 'utils/collections';
 import { parsePathParams, splitOnFirst } from 'utils/url';
 import { getSubdirectoriesFromRoot } from 'utils/common/platform';
 import toast from 'react-hot-toast';
 import mime from 'mime-types';
-import path from 'utils/common/path';
+import path, { getRelativePath } from 'utils/common/path';
 import { getUniqueTagsFromItems } from 'utils/collections/index';
 import { getCollectionEnvironmentPath } from 'utils/snapshot';
 import * as exampleReducers from './exampleReducers';
@@ -92,7 +94,24 @@ const preserveUidsAtPaths = (existing, updated, paths) => {
   return merged;
 };
 
-// Paths containing arrays with UIDs that need preservation
+const populateHistoryInItems = (items, collectionPath, historyData) => {
+  const walk = (itemList) => {
+    itemList.forEach((item) => {
+      if (item.type === 'folder') {
+        if (item.items) {
+          walk(item.items);
+        }
+      } else if (item.pathname) {
+        const relativePath = getRelativePath(collectionPath, item.pathname);
+        if (historyData && historyData[relativePath]) {
+          item.history = historyData[relativePath];
+        }
+      }
+    });
+  };
+  walk(items);
+};
+
 const REQUEST_UID_PATHS = [
   'params',
   'headers',
@@ -150,6 +169,43 @@ const initiatedWsResponse = {
   errorDetails: null,
   metadata: [],
   trailers: []
+};
+
+const interpolateTimelineRequest = (timelineRequest, collection, item) => {
+  if (!timelineRequest) return timelineRequest;
+  try {
+    const variables = getAllVariables(collection, item);
+    const clonedRequest = cloneDeep(timelineRequest);
+
+    if (clonedRequest.url && typeof clonedRequest.url === 'string') {
+      clonedRequest.url = interpolate(clonedRequest.url, variables);
+    }
+
+    if (clonedRequest.headers && typeof clonedRequest.headers === 'object') {
+      const interpolatedHeaders = {};
+      for (const [key, value] of Object.entries(clonedRequest.headers)) {
+        if (typeof value === 'string') {
+          interpolatedHeaders[key] = interpolate(value, variables);
+        } else {
+          interpolatedHeaders[key] = value;
+        }
+      }
+      clonedRequest.headers = interpolatedHeaders;
+    }
+
+    if (clonedRequest.data) {
+      if (typeof clonedRequest.data === 'string') {
+        clonedRequest.data = interpolate(clonedRequest.data, variables);
+      } else if (typeof clonedRequest.data === 'object') {
+        clonedRequest.data = interpolateObject(clonedRequest.data, variables);
+      }
+    }
+
+    return clonedRequest;
+  } catch (e) {
+    console.error('Failed to interpolate timeline request', e);
+    return timelineRequest;
+  }
 };
 
 export const collectionsSlice = createSlice({
@@ -539,7 +595,8 @@ export const collectionsSlice = createSlice({
             collection.timeline = [];
           }
 
-          const timelineRequest = action.payload.requestSent || item.requestSent || item.request;
+          const rawTimelineRequest = action.payload.requestSent || item.requestSent || item.request;
+          const timelineRequest = interpolateTimelineRequest(rawTimelineRequest, collection, item);
 
           // Ensure timestamp is a number (milliseconds since epoch)
           const timestamp = timelineRequest?.timestamp instanceof Date
@@ -560,6 +617,52 @@ export const collectionsSlice = createSlice({
               timestamp: timestamp
             }
           });
+
+          // Save to 10 most recent history entries
+          if (!item.history) {
+            item.history = [];
+          }
+          item.history.unshift({
+            id: uuid(),
+            timestamp,
+            request: timelineRequest,
+            response: action.payload.response,
+            testResults: item.testResults || [],
+            assertionResults: item.assertionResults || [],
+            preRequestTestResults: item.preRequestTestResults || [],
+            postResponseTestResults: item.postResponseTestResults || []
+          });
+          if (item.history.length > 10) {
+            item.history = item.history.slice(0, 10);
+          }
+          item.selectedHistoryId = null;
+
+          if (!collection.historyData) {
+            collection.historyData = {};
+          }
+          const relativePath = getRelativePath(collection.pathname, item.pathname);
+          collection.historyData[relativePath] = item.history;
+        }
+      }
+    },
+    selectHistoryEntry: (state, action) => {
+      const { collectionUid, itemUid, historyId } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+
+      if (collection) {
+        const item = findItemInCollection(collection, itemUid);
+        if (item) {
+          item.selectedHistoryId = historyId;
+        }
+      }
+    },
+    loadCollectionHistory: (state, action) => {
+      const { collectionUid, historyData } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        collection.historyData = (historyData && !Array.isArray(historyData)) ? historyData : {};
+        if (collection.items) {
+          populateHistoryInItems(collection.items, collection.pathname, collection.historyData);
         }
       }
     },
@@ -765,11 +868,40 @@ export const collectionsSlice = createSlice({
         const item = findItemInCollection(collection, action.payload.itemUid);
 
         if (item && item.draft) {
-          item.request = item.draft.request;
-          if (item.draft.settings) {
-            item.settings = item.draft.settings;
+          if (item.type === 'file') {
+            item.fileContent = item.draft.fileContent;
+          } else {
+            item.request = item.draft.request;
+            if (item.draft.settings) {
+              item.settings = item.draft.settings;
+            }
           }
           item.draft = null;
+        }
+      }
+    },
+    updateFileContent: (state, action) => {
+      const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
+
+      if (collection) {
+        const item = findItemInCollection(collection, action.payload.itemUid);
+
+        if (item && item.type === 'file') {
+          if (!item.draft) {
+            item.draft = cloneDeep(item);
+          }
+          item.draft.fileContent = action.payload.content;
+        }
+      }
+    },
+    setFileContent: (state, action) => {
+      const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
+
+      if (collection) {
+        const item = findItemInCollection(collection, action.payload.itemUid);
+
+        if (item && item.type === 'file') {
+          item.fileContent = action.payload.content;
         }
       }
     },
@@ -2733,6 +2865,8 @@ export const collectionsSlice = createSlice({
           // the add event might get triggered first, before the unlink event
           // this results in duplicate uids causing react renderer to go mad
           const currentItem = find(currentSubItems, (i) => i.uid === file.data.uid);
+          const relativePath = getRelativePath(collection.pathname, file.meta.pathname);
+          const history = (collection.historyData && collection.historyData[relativePath]) || [];
           if (currentItem) {
             currentItem.name = file.data.name;
             currentItem.type = file.data.type;
@@ -2749,6 +2883,9 @@ export const collectionsSlice = createSlice({
             currentItem.size = file.size;
             currentItem.error = file.error;
             currentItem.isTransient = isTransientFile;
+            if (history && history.length > 0) {
+              currentItem.history = history;
+            }
           } else {
             currentSubItems.push({
               uid: file.data.uid,
@@ -2766,7 +2903,8 @@ export const collectionsSlice = createSlice({
               loading: file.loading,
               size: file.size,
               error: file.error,
-              isTransient: isTransientFile
+              isTransient: isTransientFile,
+              history: history
             });
           }
         }
@@ -2993,6 +3131,7 @@ export const collectionsSlice = createSlice({
       item.preRequestScriptErrorContext = null;
       item.postResponseScriptErrorContext = null;
       item.testScriptErrorContext = null;
+      item.selectedHistoryId = null;
     },
     runRequestEvent: (state, action) => {
       const { itemUid, collectionUid, type, requestUid } = action.payload;
@@ -3099,6 +3238,7 @@ export const collectionsSlice = createSlice({
         }
 
         if (type === 'testrun-ended') {
+          console.log('[Runner History] testrun-ended received');
           const info = collection.runnerResult.info;
           info.status = 'ended';
           if (action.payload.runCompletionTime) {
@@ -3107,76 +3247,141 @@ export const collectionsSlice = createSlice({
           if (action.payload.statusText) {
             info.statusText = action.payload.statusText;
           }
+
+          if (collection.runnerResult && collection.runnerResult.items) {
+            console.log('[Runner History] Items count:', collection.runnerResult.items.length);
+            collection.runnerResult.items.forEach((runnerItem) => {
+              console.log('[Runner History] Processing runnerItem:', runnerItem.uid, 'status:', runnerItem.status);
+              if (runnerItem.status === 'completed' || runnerItem.status === 'error') {
+                const reqItem = findItemInCollection(collection, runnerItem.uid);
+                console.log('[Runner History] Found reqItem in collection:', reqItem?.name, 'UID:', reqItem?.uid);
+                if (reqItem) {
+                  if (!reqItem.history) {
+                    reqItem.history = [];
+                  }
+
+                  const timestamp = runnerItem.requestSent?.timestamp || Date.now();
+
+                  reqItem.history.unshift({
+                    id: uuid(),
+                    timestamp,
+                    request: interpolateTimelineRequest(runnerItem.requestSent, collection, reqItem),
+                    response: runnerItem.responseReceived,
+                    testResults: runnerItem.testResults || [],
+                    assertionResults: runnerItem.assertionResults || [],
+                    preRequestTestResults: runnerItem.preRequestTestResults || [],
+                    postResponseTestResults: runnerItem.postResponseTestResults || []
+                  });
+
+                  if (reqItem.history.length > 10) {
+                    reqItem.history = reqItem.history.slice(0, 10);
+                  }
+                  reqItem.selectedHistoryId = null;
+
+                  if (!collection.historyData) {
+                    collection.historyData = {};
+                  }
+                  const relativePath = getRelativePath(collection.pathname, reqItem.pathname);
+                  collection.historyData[relativePath] = reqItem.history;
+                  console.log('[Runner History] Saved history for relative path:', relativePath);
+                }
+              }
+            });
+          }
         }
 
         if (type === 'request-queued') {
-          collection.runnerResult.items.push({
-            uid: request.uid,
-            status: 'queued'
-          });
+          if (itemUid) {
+            collection.runnerResult.items.push({
+              uid: itemUid,
+              status: 'queued'
+            });
+          }
         }
 
         if (type === 'request-sent') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.status = 'running';
-          item.requestSent = action.payload.requestSent;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.status = 'running';
+            item.requestSent = action.payload.requestSent;
+          }
         }
 
         if (type === 'response-received') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.status = 'completed';
-          item.responseReceived = action.payload.responseReceived;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.status = 'completed';
+            item.responseReceived = action.payload.responseReceived;
+          }
         }
 
         if (type === 'test-results') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.testResults = action.payload.testResults;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.testResults = action.payload.testResults;
+          }
         }
 
         if (type === 'test-results-pre-request') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.preRequestTestResults = action.payload.preRequestTestResults;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.preRequestTestResults = action.payload.preRequestTestResults;
+          }
         }
 
         if (type === 'test-results-post-response') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.postResponseTestResults = action.payload.postResponseTestResults;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.postResponseTestResults = action.payload.postResponseTestResults;
+          }
         }
 
         if (type === 'assertion-results') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.assertionResults = action.payload.assertionResults;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.assertionResults = action.payload.assertionResults;
+          }
         }
 
         if (type === 'error') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.error = action.payload.error;
-          item.responseReceived = action.payload.responseReceived;
-          item.status = 'error';
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.error = action.payload.error;
+            item.responseReceived = action.payload.responseReceived;
+            item.status = 'error';
+          }
         }
 
         if (type === 'runner-request-skipped') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.status = 'skipped';
-          item.responseReceived = action.payload.responseReceived;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.status = 'skipped';
+            item.responseReceived = action.payload.responseReceived;
+          }
         }
 
         if (type === 'post-response-script-execution') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.postResponseScriptErrorMessage = action.payload.errorMessage;
-          item.postResponseScriptErrorContext = action.payload.errorContext || null;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.postResponseScriptErrorMessage = action.payload.errorMessage;
+            item.postResponseScriptErrorContext = action.payload.errorContext || null;
+          }
         }
 
         if (type === 'test-script-execution') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.testScriptErrorMessage = action.payload.errorMessage;
-          item.testScriptErrorContext = action.payload.errorContext || null;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.testScriptErrorMessage = action.payload.errorMessage;
+            item.testScriptErrorContext = action.payload.errorContext || null;
+          }
         }
 
         if (type === 'pre-request-script-execution') {
-          const item = collection.runnerResult.items.findLast((i) => i.uid === request.uid);
-          item.preRequestScriptErrorMessage = action.payload.errorMessage;
-          item.preRequestScriptErrorContext = action.payload.errorContext || null;
+          const item = collection.runnerResult.items.findLast((i) => i.uid === itemUid);
+          if (item) {
+            item.preRequestScriptErrorMessage = action.payload.errorMessage;
+            item.preRequestScriptErrorContext = action.payload.errorContext || null;
+          }
         }
       }
     },
@@ -3810,6 +4015,10 @@ export const {
   setResponseExampleRequestHeaders,
   setResponseExampleParams,
   /* Response Example Actions - End */
+  updateFileContent,
+  setFileContent,
+  loadCollectionHistory,
+  selectHistoryEntry,
   addTransientDirectory,
   addSaveTransientRequestModal,
   removeSaveTransientRequestModal,

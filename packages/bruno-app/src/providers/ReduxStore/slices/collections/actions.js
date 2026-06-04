@@ -61,11 +61,12 @@ import {
   updateCollectionVar,
   addTransientDirectory,
   addSaveTransientRequestModal,
-  updatePathParam
+  updatePathParam,
+  loadCollectionHistory
 } from './index';
 
 import { each } from 'lodash';
-import { closeAllCollectionTabs, closeTabs as _closeTabs, focusTab, restoreTabs, reopenLastClosedTab } from 'providers/ReduxStore/slices/tabs';
+import { closeAllCollectionTabs, closeTabs as _closeTabs, focusTab, restoreTabs, reopenLastClosedTab, setExecutedInTab } from 'providers/ReduxStore/slices/tabs';
 import { clearOpenApiSyncTabState } from 'providers/ReduxStore/slices/openapi-sync';
 import { removeCollectionFromWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { resolveRequestFilename } from 'utils/common/platform';
@@ -168,8 +169,34 @@ export const saveRequest = (itemUid, collectionUid, silent = false) => (dispatch
       return reject();
     }
 
-    const itemToSave = transformRequestToSaveToFilesystem(item);
     const { ipcRenderer } = window;
+
+    if (item.type === 'file') {
+      ipcRenderer
+        .invoke('renderer:write-file-content', {
+          pathname: item.pathname,
+          content: item.draft ? item.draft.fileContent : item.fileContent
+        })
+        .then(() => {
+          if (!silent) {
+            toast.success('File saved successfully');
+          }
+          dispatch(
+            _saveRequest({
+              itemUid,
+              collectionUid
+            })
+          );
+        })
+        .then(resolve)
+        .catch((err) => {
+          toast.error(err.message || 'Failed to save file!');
+          reject(err);
+        });
+      return;
+    }
+
+    const itemToSave = transformRequestToSaveToFilesystem(item);
 
     itemSchema
       .validate(itemToSave)
@@ -192,7 +219,29 @@ export const saveRequest = (itemUid, collectionUid, silent = false) => (dispatch
       });
   });
 };
+export const saveCollectionHistory = (collectionUid) => (dispatch, getState) => {
+  const state = getState();
+  const collection = findCollectionByUid(state.collections.collections, collectionUid);
+  console.log('[saveCollectionHistory] start for collection:', collection?.name, collectionUid);
+  if (!collection || !collection.historyData) {
+    console.log('[saveCollectionHistory] collection or historyData not found in state:', !!collection, !!collection?.historyData);
+    return Promise.resolve();
+  }
 
+  console.log('[saveCollectionHistory] Writing history to disk for collection path:', collection.pathname, collection.historyData);
+  const { ipcRenderer } = window;
+  return ipcRenderer
+    .invoke('renderer:write-history', {
+      collectionPath: collection.pathname,
+      history: collection.historyData
+    })
+    .then((res) => {
+      console.log('[saveCollectionHistory] Write success:', res);
+    })
+    .catch((err) => {
+      console.error('Failed to write history to disk', err);
+    });
+};
 export const saveMultipleRequests = (items) => (dispatch, getState) => {
   const state = getState();
   const { collections } = state.collections;
@@ -531,6 +580,12 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
   const collection = findCollectionByUid(state.collections.collections, collectionUid);
   const itemUid = item?.uid;
 
+  dispatch(
+    setExecutedInTab({
+      uid: itemUid
+    })
+  );
+
   return new Promise(async (resolve, reject) => {
     if (!collection) {
       return reject(new Error('Collection not found'));
@@ -599,8 +654,7 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
               timestamp: entry.timestamp instanceof Date ? entry.timestamp.getTime() : entry.timestamp
             }))
           };
-
-          return dispatch(
+          dispatch(
             responseReceived({
               itemUid,
               collectionUid,
@@ -608,6 +662,7 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
               requestSent
             })
           );
+          dispatch(saveCollectionHistory(collectionUid));
         })
         .then(resolve)
         .catch((err) => {
@@ -623,6 +678,7 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
                 requestSent
               })
             );
+            dispatch(saveCollectionHistory(collectionUid));
             return;
           }
 
@@ -642,6 +698,7 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
               requestSent
             })
           );
+          dispatch(saveCollectionHistory(collectionUid));
         });
     }
   });
@@ -2654,7 +2711,17 @@ export const openCollectionEvent = (uid, pathname, brunoConfig) => (dispatch, ge
             }
           }
 
-          resolve();
+          ipcRenderer
+            .invoke('renderer:read-history', { collectionPath: pathname })
+            .then((historyData) => {
+              dispatch(loadCollectionHistory({ collectionUid: uid, historyData }));
+            })
+            .catch((err) => {
+              console.error('Failed to load history', err);
+            })
+            .finally(() => {
+              resolve();
+            });
         })
         .catch(reject);
     });

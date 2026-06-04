@@ -23,9 +23,11 @@ import {
   runRequestEvent,
   scriptEnvironmentUpdateEvent,
   streamDataReceived,
-  setDotEnvVariables
+  setDotEnvVariables,
+  loadCollectionHistory
 } from 'providers/ReduxStore/slices/collections';
-import { collectionAddEnvFileEvent, openCollectionEvent, hydrateCollectionWithUiStateSnapshot, mergeAndPersistEnvironment } from 'providers/ReduxStore/slices/collections/actions';
+import { findCollectionByPathname } from 'utils/collections/index';
+import { collectionAddEnvFileEvent, openCollectionEvent, hydrateCollectionWithUiStateSnapshot, mergeAndPersistEnvironment, saveCollectionHistory } from 'providers/ReduxStore/slices/collections/actions';
 import {
   workspaceOpenedEvent,
   workspaceConfigUpdatedEvent,
@@ -217,11 +219,24 @@ const useIpcEvents = () => {
     });
 
     const removeRunFolderEventListener = ipcRenderer.on('main:run-folder-event', (val) => {
+      console.log('[Runner Event Listener] Received event:', val?.type, val);
       dispatch(runFolderEvent(val));
+      if (val && val.type === 'testrun-ended') {
+        console.log('[Runner Event Listener] Dispatching saveCollectionHistory for collection:', val.collectionUid);
+        dispatch(saveCollectionHistory(val.collectionUid));
+      }
     });
 
     const removeRunRequestEventListener = ipcRenderer.on('main:run-request-event', (val) => {
       dispatch(runRequestEvent(val));
+    });
+
+    const removeCollectionHistoryUpdatedListener = ipcRenderer.on('main:collection-history-updated', ({ collectionPath, history }) => {
+      const state = store.getState();
+      const collection = findCollectionByPathname(state.collections.collections, collectionPath);
+      if (collection) {
+        dispatch(loadCollectionHistory({ collectionUid: collection.uid, historyData: history }));
+      }
     });
 
     const removeProcessEnvUpdatesListener = ipcRenderer.on('main:process-env-update', (val) => {
@@ -358,6 +373,7 @@ const useIpcEvents = () => {
       removeCollectionRenamedListener();
       removeRunFolderEventListener();
       removeRunRequestEventListener();
+      removeCollectionHistoryUpdatedListener();
       removeProcessEnvUpdatesListener();
       removeWorkspaceDotEnvUpdatesListener();
       removeDotEnvFileUpdateListener();

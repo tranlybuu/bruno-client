@@ -24,6 +24,8 @@ import HeightBoundContainer from 'ui/HeightBoundContainer';
 import ResponseStopWatch from 'components/ResponsePane/ResponseStopWatch';
 import WSMessagesList from './WsResponsePane/WSMessagesList';
 import ResponsiveTabs from 'ui/ResponsiveTabs';
+import HistoryPanel from './HistoryPanel';
+import { selectHistoryEntry } from 'providers/ReduxStore/slices/collections';
 
 // Width threshold for expanded right-side action buttons
 const RIGHT_CONTENT_EXPANDED_WIDTH = 135;
@@ -36,7 +38,15 @@ const ResponsePane = ({ item, collection }) => {
   const [showScriptErrorCard, setShowScriptErrorCard] = useState(false);
   const rightContentRef = useRef(null);
 
-  const response = item.response || {};
+  const selectedHistoryEntry = useMemo(() => {
+    if (!item.selectedHistoryId || !item.history) {
+      return null;
+    }
+    return item.history.find((entry) => entry.id === item.selectedHistoryId);
+  }, [item.selectedHistoryId, item.history]);
+
+  const activeResponse = selectedHistoryEntry ? selectedHistoryEntry.response : item.response;
+  const response = activeResponse || {};
 
   // Get the focused tab for reading persisted format/view state
   const focusedTab = find(tabs, (t) => t.uid === activeTabUid);
@@ -54,6 +64,16 @@ const ResponsePane = ({ item, collection }) => {
   // Use persisted values from Redux, falling back to initial values or defaults
   const selectedFormat = persistedFormat ?? initialFormat ?? 'raw';
   const selectedViewTab = persistedViewTab ?? initialTab ?? 'editor';
+
+  const hasExecuted = focusedTab?.executedInTab;
+
+  const activeResponsePaneTab = useMemo(() => {
+    const tab = focusedTab?.responsePaneTab;
+    if (!hasExecuted) {
+      return 'timeline';
+    }
+    return tab;
+  }, [focusedTab?.responsePaneTab, hasExecuted]);
 
   useEffect(() => {
     if (!focusedTab || initialFormat === null || initialTab === null) {
@@ -81,7 +101,36 @@ const ResponsePane = ({ item, collection }) => {
     dispatch(updateResponseViewTab({ uid: item.uid, responseViewTab: newViewTab }));
   }, [dispatch, item.uid]);
 
-  const requestTimeline = ([...(collection.timeline || [])]).filter((obj) => {
+  const testResults = selectedHistoryEntry ? selectedHistoryEntry.testResults : (item.testResults || []);
+  const assertionResults = selectedHistoryEntry ? selectedHistoryEntry.assertionResults : (item.assertionResults || []);
+  const preRequestTestResults = selectedHistoryEntry ? selectedHistoryEntry.preRequestTestResults : (item.preRequestTestResults || []);
+  const postResponseTestResults = selectedHistoryEntry ? selectedHistoryEntry.postResponseTestResults : (item.postResponseTestResults || []);
+
+  const collectionForTimeline = useMemo(() => {
+    if (!selectedHistoryEntry) {
+      return collection;
+    }
+    return {
+      ...collection,
+      timeline: [
+        {
+          type: 'request',
+          collectionUid: collection.uid,
+          folderUid: null,
+          itemUid: item.uid,
+          requestUid: item.requestUid,
+          timestamp: selectedHistoryEntry.timestamp,
+          data: {
+            request: selectedHistoryEntry.request,
+            response: selectedHistoryEntry.response,
+            timestamp: selectedHistoryEntry.timestamp
+          }
+        }
+      ]
+    };
+  }, [collection, selectedHistoryEntry, item.uid, item.requestUid]);
+
+  const requestTimeline = ([...(collectionForTimeline.timeline || [])]).filter((obj) => {
     if (obj.itemUid === item.uid) return true;
   });
 
@@ -119,6 +168,18 @@ const ResponsePane = ({ item, collection }) => {
   const hasScriptError = item?.preRequestScriptErrorMessage || item?.postResponseScriptErrorMessage || item?.testScriptErrorMessage;
 
   const allTabs = useMemo(() => {
+    if (!hasExecuted) {
+      return [
+        {
+          key: 'timeline',
+          label: 'Timeline',
+          indicator: (item.history && item.history.length > 0) ? (
+            <sup className="ml-1 font-medium">{item.history.length}</sup>
+          ) : null
+        }
+      ];
+    }
+
     return [
       {
         key: 'response',
@@ -133,29 +194,39 @@ const ResponsePane = ({ item, collection }) => {
       {
         key: 'timeline',
         label: 'Timeline',
-        indicator: null
+        indicator: (item.history && item.history.length > 0) ? (
+          <sup className="ml-1 font-medium">{item.history.length}</sup>
+        ) : null
       },
       {
         key: 'tests',
         label: (
           <TestResultsLabel
-            results={item.testResults}
-            assertionResults={item.assertionResults}
-            preRequestTestResults={item.preRequestTestResults}
-            postResponseTestResults={item.postResponseTestResults}
+            results={testResults}
+            assertionResults={assertionResults}
+            preRequestTestResults={preRequestTestResults}
+            postResponseTestResults={postResponseTestResults}
           />
         ),
         indicator: null
       }
     ];
-  }, [responseHeadersCount, item.testResults, item.assertionResults, item.preRequestTestResults, item.postResponseTestResults]);
+  }, [
+    hasExecuted,
+    responseHeadersCount,
+    testResults,
+    assertionResults,
+    preRequestTestResults,
+    postResponseTestResults,
+    item.history
+  ]);
 
   const getTabPanel = (tab) => {
     switch (tab) {
       case 'response': {
-        const isStream = item.response?.stream ?? false;
+        const isStream = activeResponse?.stream ?? false;
         if (isStream) {
-          return <WSMessagesList order={-1} messages={item.response.data} />;
+          return <WSMessagesList order={-1} messages={response.data} />;
         }
         return (
           <QueryResult
@@ -179,16 +250,30 @@ const ResponsePane = ({ item, collection }) => {
         return <ResponseHeaders headers={response.headers} />;
       }
       case 'timeline': {
-        return <Timeline collection={collection} item={item} activeTabUid={activeTabUid} />;
+        return (
+          <HistoryPanel
+            item={item}
+            collection={collection}
+            onSelectSession={(historyId) => {
+              dispatch(
+                selectHistoryEntry({
+                  collectionUid: collection.uid,
+                  itemUid: item.uid,
+                  historyId
+                })
+              );
+            }}
+          />
+        );
       }
       case 'tests': {
         return (
           <TestResults
             item={item}
-            results={item.testResults}
-            assertionResults={item.assertionResults}
-            preRequestTestResults={item.preRequestTestResults}
-            postResponseTestResults={item.postResponseTestResults}
+            results={testResults}
+            assertionResults={assertionResults}
+            preRequestTestResults={preRequestTestResults}
+            postResponseTestResults={postResponseTestResults}
           />
         );
       }
@@ -215,14 +300,6 @@ const ResponsePane = ({ item, collection }) => {
     );
   }
 
-  if (!item.response && !requestTimeline?.length) {
-    return (
-      <HeightBoundContainer>
-        <Placeholder />
-      </HeightBoundContainer>
-    );
-  }
-
   if (!activeTabUid) {
     return <div>Something went wrong</div>;
   }
@@ -239,7 +316,7 @@ const ResponsePane = ({ item, collection }) => {
           onClick={() => setShowScriptErrorCard(true)}
         />
       )}
-      {focusedTab?.responsePaneTab === 'response' && item?.response && !(item.response?.stream ?? false) ? (
+      {activeResponsePaneTab === 'response' && activeResponse && !(activeResponse?.stream ?? false) ? (
         <>
           {/* Result View Tabs (Visualizations + Response Format) */}
           <div className="result-view-tabs">
@@ -260,17 +337,17 @@ const ResponsePane = ({ item, collection }) => {
         </>
       ) : null}
       <div className="flex items-center response-pane-status">
-        <StatusCode status={response.status} isStreaming={item.response?.stream?.running} />
-        {item.response?.stream?.running
+        <StatusCode status={response.status} isStreaming={activeResponse?.stream?.running} />
+        {activeResponse?.stream?.running
           ? <ResponseStopWatch startMillis={response.duration} />
           : <ResponseTime duration={response.duration} />}
         <ResponseSize size={responseSize} />
       </div>
 
       <div className="flex items-center response-pane-actions">
-        {focusedTab?.responsePaneTab === 'timeline' ? (
+        {activeResponsePaneTab === 'timeline' ? (
           <ClearTimeline item={item} collection={collection} />
-        ) : item?.response && !item?.response?.error ? (
+        ) : activeResponse && !activeResponse?.error ? (
           <ResponsePaneActions
             item={item}
             collection={collection}
@@ -290,7 +367,7 @@ const ResponsePane = ({ item, collection }) => {
       <div className="px-4">
         <ResponsiveTabs
           tabs={allTabs}
-          activeTab={focusedTab.responsePaneTab}
+          activeTab={activeResponsePaneTab}
           onTabSelect={selectTab}
           rightContent={rightContent}
           rightContentRef={rightContentRef}
@@ -307,16 +384,10 @@ const ResponsePane = ({ item, collection }) => {
           />
         )}
         <div className="response-tab-content">
-          {!item?.response ? (
-            focusedTab?.responsePaneTab === 'timeline' && requestTimeline?.length ? (
-              <Timeline
-                collection={collection}
-                item={item}
-                activeTabUid={activeTabUid}
-              />
-            ) : null
+          {(!activeResponse && activeResponsePaneTab !== 'timeline') ? (
+            null
           ) : (
-            <>{getTabPanel(focusedTab.responsePaneTab)}</>
+            <>{getTabPanel(activeResponsePaneTab)}</>
           )}
         </div>
       </section>
