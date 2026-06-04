@@ -441,6 +441,12 @@ export const collectionsSlice = createSlice({
         }
       }
     },
+    toggleShowOnlyRequests: (state, action) => {
+      const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
+      if (collection) {
+        collection.showOnlyRequests = !collection.showOnlyRequests;
+      }
+    },
     scriptEnvironmentUpdateEvent: (state, action) => {
       const { collectionUid, envVariables, runtimeVariables, persistentEnvVariables } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
@@ -2979,6 +2985,16 @@ export const collectionsSlice = createSlice({
         const item = findItemInCollection(collection, file.data.uid);
 
         if (item) {
+          if (item.type === 'file') {
+            item.fileContent = file.data.fileContent;
+            item.filename = file.meta.name;
+            item.pathname = file.meta.pathname;
+            if (item.draft && item.draft.fileContent === file.data.fileContent) {
+              item.draft = null;
+            }
+            return;
+          }
+
           // whenever a user attempts to sort a req within the same folder
           // the seq is updated, but everything else remains the same
           // we don't want to lose the draft in this case
@@ -3900,6 +3916,7 @@ export const {
   deleteItem,
   renameItem,
   cloneItem,
+  toggleShowOnlyRequests,
   scriptEnvironmentUpdateEvent,
   processEnvUpdateEvent,
   workspaceEnvUpdateEvent,

@@ -18,7 +18,8 @@ import {
   IconTrash,
   IconSettings,
   IconInfoCircle,
-  IconTerminal2
+  IconTerminal2,
+  IconFile
 } from '@tabler/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { addTab, focusTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
@@ -29,6 +30,7 @@ import { uuid } from 'utils/common';
 import { copyRequest, setFocusedSidebarPath } from 'providers/ReduxStore/slices/app';
 import NewRequest from 'components/Sidebar/NewRequest';
 import NewFolder from 'components/Sidebar/NewFolder';
+import NewFile from 'components/Sidebar/NewFile';
 import RenameCollectionItem from './RenameCollectionItem';
 import CloneCollectionItem from './CloneCollectionItem';
 import DeleteCollectionItem from './DeleteCollectionItem';
@@ -95,6 +97,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   const [generateCodeItemModalOpen, setGenerateCodeItemModalOpen] = useState(false);
   const [newRequestModalOpen, setNewRequestModalOpen] = useState(false);
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
+  const [newFileModalOpen, setNewFileModalOpen] = useState(false);
   const [runCollectionModalOpen, setRunCollectionModalOpen] = useState(false);
   const [itemInfoModalOpen, setItemInfoModalOpen] = useState(false);
   const [examplesExpanded, setExamplesExpanded] = useState(false);
@@ -340,6 +343,12 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
           onClick: () => setNewRequestModalOpen(true)
         },
         {
+          id: 'new-file',
+          leftSection: IconFile,
+          label: 'New File',
+          onClick: () => setNewFileModalOpen(true)
+        },
+        {
           id: 'new-folder',
           leftSection: IconFolderPlus,
           label: 'New Folder',
@@ -540,8 +549,9 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
     setCreateExampleModalOpen(false);
   };
 
-  const folderItems = sortByNameThenSequence(filter(item.items, (i) => isItemAFolder(i) && !i.isTransient));
-  const requestItems = sortItemsBySequence(filter(item.items, (i) => isItemARequest(i) && !i.isTransient));
+  const showOnlyRequests = collection?.showOnlyRequests;
+  const folderItems = sortByNameThenSequence(filter(item.items, (i) => isItemAFolder(i) && !i.isTransient && i.name !== '.bruno'));
+  const requestItems = sortItemsBySequence(filter(item.items, (i) => isItemARequest(i) && !i.isTransient && !(showOnlyRequests && i.type === 'file')));
   const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !requestItems?.length;
 
   const emptyFolderMenuItems = createEmptyStateMenuItems({ dispatch, collection, itemUid: item.uid });
@@ -624,6 +634,9 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
       )}
       {newFolderModalOpen && (
         <NewFolder item={item} collectionUid={collectionUid} onClose={() => setNewFolderModalOpen(false)} />
+      )}
+      {newFileModalOpen && (
+        <NewFile item={item} collectionUid={collectionUid} onClose={() => setNewFileModalOpen(false)} />
       )}
       {runCollectionModalOpen && (
         <RunCollectionItem collectionUid={collectionUid} item={item} onClose={() => setRunCollectionModalOpen(false)} />

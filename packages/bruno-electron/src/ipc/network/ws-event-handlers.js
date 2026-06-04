@@ -318,8 +318,35 @@ const registerWsEventHandlers = (window) => {
         if (!connectOnly) {
           const hasMessages = preparedRequest.body.ws.some((msg) => msg.content.length);
           if (hasMessages) {
+            let cumulativeDelay = 0;
             preparedRequest.body.ws.forEach((message) => {
-              wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content);
+              cumulativeDelay += (message.delay || 0) * 1000;
+              if (cumulativeDelay > 0) {
+                setTimeout(() => {
+                  if (wsClient.isConnectionActive(preparedRequest.uid)) {
+                    wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
+                  }
+                }, cumulativeDelay);
+              } else {
+                wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
+              }
+            });
+          }
+        } else if (!options?.skipSendOnConnect) {
+          const sendOnConnectMessages = preparedRequest.body.ws.filter((msg) => msg.sendOnConnect !== false && msg.content?.length);
+          if (sendOnConnectMessages.length > 0) {
+            let cumulativeDelay = 0;
+            sendOnConnectMessages.forEach((message) => {
+              cumulativeDelay += (message.delay || 0) * 1000;
+              if (cumulativeDelay > 0) {
+                setTimeout(() => {
+                  if (wsClient.isConnectionActive(preparedRequest.uid)) {
+                    wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
+                  }
+                }, cumulativeDelay);
+              } else {
+                wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
+              }
             });
           }
         }
@@ -400,31 +427,34 @@ const registerWsEventHandlers = (window) => {
 
   ipcMain.handle(
     'renderer:ws:queue-message',
-    async (event, { item, collection, environment, runtimeVariables, messageContent }) => {
+    async (event, { item, collection, environment, runtimeVariables, messageContent, messageIndex }) => {
       try {
         const itemCopy = cloneDeep(item);
         const preparedRequest = await prepareWsRequest(itemCopy, collection, environment, runtimeVariables, {});
 
-        // If messageContent is provided, find and queue that specific message (interpolated)
-        // Otherwise, queue all messages
-        if (messageContent !== undefined && messageContent !== null) {
+        if (typeof messageIndex === 'number') {
+          if (preparedRequest.body?.ws?.[messageIndex]) {
+            const message = preparedRequest.body.ws[messageIndex];
+            wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
+          }
+        } else if (messageContent !== undefined && messageContent !== null) {
           // Find the message index in the original request
           const originalMessages = itemCopy.draft?.request?.body?.ws || itemCopy.request?.body?.ws || [];
-          const messageIndex = originalMessages.findIndex((msg) => msg.content === messageContent);
+          const matchedIndex = originalMessages.findIndex((msg) => msg.content === messageContent);
 
-          if (messageIndex >= 0 && preparedRequest.body?.ws?.[messageIndex]) {
+          if (matchedIndex >= 0 && preparedRequest.body?.ws?.[matchedIndex]) {
             // Queue the interpolated version of the specific message
-            const message = preparedRequest.body.ws[messageIndex];
+            const message = preparedRequest.body.ws[matchedIndex];
             wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
           } else {
             // Message not found in request body, queue as-is (shouldn't happen in normal flow)
             wsClient.queueMessage(preparedRequest.uid, collection.uid, messageContent);
           }
         } else {
-          // Queue all messages (they are already interpolated by prepareWsRequest -> interpolateVars)
+          // Queue all checked messages (they are already interpolated by prepareWsRequest -> interpolateVars)
           if (preparedRequest.body && preparedRequest.body.ws && Array.isArray(preparedRequest.body.ws)) {
             preparedRequest.body.ws
-              .filter((message) => message && message.content)
+              .filter((message) => message && message.content && message.sendOnConnect !== false)
               .forEach((message) => {
                 wsClient.queueMessage(preparedRequest.uid, collection.uid, message.content, message.type);
               });

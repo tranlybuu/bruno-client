@@ -70,7 +70,7 @@ const RequestTabPanel = () => {
   useKeybinding('sendRequest', (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
-    handleRun();
+    handleRun({ isShortcut: true });
     return false;
   }, { enabled: !!isRequestTab, deps: [isRequestTab] });
 
@@ -439,7 +439,7 @@ const RequestTabPanel = () => {
     return <RequestIsLoading item={item} />;
   }
 
-  const handleRun = async () => {
+  const handleRun = async (options = {}) => {
     const request = item.draft ? item.draft.request : item.request;
 
     if (isGrpcRequest && !request.url) {
@@ -457,7 +457,7 @@ const RequestTabPanel = () => {
       return;
     }
     if (item.requestState !== 'sending' && item.requestState !== 'queued') {
-      dispatch(sendRequest(item, collection.uid)).catch((err) =>
+      dispatch(sendRequest(item, collection.uid, options)).catch((err) =>
         toast.custom((t) => <NetworkError onClose={() => toast.dismiss(t.id)} />, {
           duration: 5000
         }));

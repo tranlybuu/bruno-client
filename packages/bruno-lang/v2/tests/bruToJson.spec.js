@@ -7,6 +7,8 @@ describe('bruToJson parser', () => {
 body:ws {
     type: json
     name: message 1
+    sendOnConnect: true
+    delay: 2
     content: '''
       {"foo":"bar"}
     ''' 
@@ -24,7 +26,9 @@ settings {
             {
               content: '{"foo":"bar"}',
               name: 'message 1',
-              type: 'json'
+              type: 'json',
+              sendOnConnect: true,
+              delay: 2
             }
           ]
         },

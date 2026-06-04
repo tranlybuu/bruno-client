@@ -574,7 +574,7 @@ const extractPromptVariablesForRequest = async (item, collection) => {
   });
 };
 
-export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
+export const sendRequest = (item, collectionUid, options = {}) => (dispatch, getState) => {
   const state = getState();
   const { globalEnvironments, activeGlobalEnvironmentUid } = state.globalEnvironments;
   const collection = findCollectionByUid(state.collections.collections, collectionUid);
@@ -637,7 +637,10 @@ export const sendRequest = (item, collectionUid) => (dispatch, getState) => {
           toast.error(err.message);
         });
     } else if (isWsRequest) {
-      sendWsRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
+      const activeTabUid = state.tabs.activeTabUid;
+      const tab = state.tabs.tabs.find((t) => t.uid === activeTabUid);
+      const activeWsMessageIndex = tab?.activeWsMessageIndex ?? 0;
+      sendWsRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables, activeWsMessageIndex, options.isShortcut)
         .then(resolve)
         .catch((err) => {
           toast.error(err.message);
@@ -855,6 +858,38 @@ export const newFolder = (folderName, directoryName, collectionUid, itemUid) => 
         return reject(new Error('unable to find parent folder'));
       }
     }
+  });
+};
+
+export const newFile = (filename, collectionUid, itemUid) => (dispatch, getState) => {
+  const state = getState();
+  const collection = findCollectionByUid(state.collections.collections, collectionUid);
+  const parentItem = itemUid ? findItemInCollection(collection, itemUid) : collection;
+
+  return new Promise((resolve, reject) => {
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    const fileExists = find(
+      parentItem.items || [],
+      (i) => trim(i.name).toLowerCase() === trim(filename).toLowerCase()
+    );
+
+    if (fileExists) {
+      return reject(new Error('A file with the same name already exists in this folder'));
+    }
+
+    const fullName = path.join(parentItem.pathname, filename);
+    const { ipcRenderer } = window;
+
+    ipcRenderer
+      .invoke('renderer:write-file-content', { pathname: fullName, content: '' })
+      .then(resolve)
+      .catch((error) => {
+        toast.error('Failed to create a new file!');
+        reject(error);
+      });
   });
 };
 

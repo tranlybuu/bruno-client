@@ -572,6 +572,12 @@ const change = async (win, pathname, collectionUid, collectionPath) => {
       return;
     }
     try {
+      let content = '';
+      try {
+        content = fs.readFileSync(pathname, 'utf8');
+      } catch (readErr) {
+        console.error(`Error reading changed file: ${pathname}`, readErr);
+      }
       const file = {
         meta: {
           collectionUid,
@@ -581,7 +587,8 @@ const change = async (win, pathname, collectionUid, collectionPath) => {
         data: {
           uid: getRequestUid(pathname),
           name: path.basename(pathname),
-          type: 'file'
+          type: 'file',
+          fileContent: content
         }
       };
       win.webContents.send('main:collection-tree-updated', 'change', file);

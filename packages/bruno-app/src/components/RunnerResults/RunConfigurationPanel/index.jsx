@@ -188,7 +188,7 @@ const RunConfigurationPanel = ({ collection, selectedItems, setSelectedItems, ta
     const processItems = (items) => {
       if (!items?.length) return;
 
-      const folderItems = sortByNameThenSequence(items.filter((item) => isItemAFolder(item) && !item.isTransient));
+      const folderItems = sortByNameThenSequence(items.filter((item) => isItemAFolder(item) && !item.isTransient && item.name !== '.bruno'));
       const requestItems = items
         .filter((item) => isItemARequest(item) && !item.partial && !item.isTransient)
         .sort((a, b) => a.seq - b.seq);

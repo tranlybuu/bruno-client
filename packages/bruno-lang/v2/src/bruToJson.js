@@ -1159,10 +1159,15 @@ const sem = grammar.createSemantics().addAttribute('ast', {
     const namePair = _.find(pairs, { name: 'name' });
     const contentPair = _.find(pairs, { name: 'content' });
     const typePair = _.find(pairs, { name: 'type' });
+    const sendOnConnectPair = _.find(pairs, { name: 'sendOnConnect' });
+    const delayPair = _.find(pairs, { name: 'delay' });
 
     const messageName = namePair ? namePair.value : '';
     const messageContent = contentPair ? contentPair.value : '';
     const messageTypeContent = typePair ? typePair.value : '';
+    const sendOnConnect = sendOnConnectPair ? (sendOnConnectPair.value === 'true' || sendOnConnectPair.value === true) : false;
+    const delayVal = delayPair ? parseInt(delayPair.value, 10) : 0;
+    const delay = isNaN(delayVal) ? 0 : delayVal;
 
     return {
       body: {
@@ -1171,7 +1176,9 @@ const sem = grammar.createSemantics().addAttribute('ast', {
           {
             name: messageName,
             type: messageTypeContent,
-            content: messageContent
+            content: messageContent,
+            sendOnConnect,
+            delay
           }
         ]
       }

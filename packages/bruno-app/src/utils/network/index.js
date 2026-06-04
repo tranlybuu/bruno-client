@@ -224,18 +224,21 @@ export const connectWS = async (item, collection, environment, runtimeVariables,
   });
 };
 
-export const sendWsRequest = async (item, collection, environment, runtimeVariables) => {
+export const sendWsRequest = async (item, collection, environment, runtimeVariables, activeWsMessageIndex, isShortcut) => {
   const ensureConnection = async () => {
     const connectionStatus = await isWsConnectionActive(item.uid);
     if (!connectionStatus.isActive) {
-      await connectWS(item, collection, environment, runtimeVariables, { connectOnly: true });
+      await connectWS(item, collection, environment, runtimeVariables, { connectOnly: true, skipSendOnConnect: true });
     }
   };
 
   await ensureConnection();
 
-  // Use queueWsMessage helper to queue all messages with proper variable interpolation
-  const result = await queueWsMessage(item, collection, environment, runtimeVariables, null);
+  // Use queueWsMessage helper
+  // If it is a shortcut, send only the activeWsMessageIndex
+  // Otherwise (global Send button), send all checked messages (by passing null)
+  const messageParam = isShortcut ? (typeof activeWsMessageIndex === 'number' ? activeWsMessageIndex : 0) : null;
+  const result = await queueWsMessage(item, collection, environment, runtimeVariables, messageParam);
 
   if (result.success) {
     return {};
@@ -253,7 +256,7 @@ export const sendWsRequest = async (item, collection, environment, runtimeVariab
  * @param {string} messageContent - The message content to queue (or null to queue all messages)
  * @returns {Promise<Object>} - The result of the queue operation
  */
-export const queueWsMessage = async (item, collection, environment, runtimeVariables, messageContent) => {
+export const queueWsMessage = async (item, collection, environment, runtimeVariables, messageInfo) => {
   return new Promise((resolve, reject) => {
     const { ipcRenderer } = window;
     ipcRenderer.invoke('renderer:ws:queue-message', {
@@ -261,7 +264,7 @@ export const queueWsMessage = async (item, collection, environment, runtimeVaria
       collection,
       environment,
       runtimeVariables,
-      messageContent
+      ...(typeof messageInfo === 'number' ? { messageIndex: messageInfo } : { messageContent: messageInfo })
     }).then(resolve).catch(reject);
   });
 };

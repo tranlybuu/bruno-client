@@ -91,7 +91,7 @@ const WSMessageItem = memo(({ message, isOpen, onToggle }) => {
 
   const handleToggle = () => {
     if (!canOpenMessage) return;
-    onToggle?.(message.timestamp);
+    onToggle?.();
   };
 
   return (
@@ -180,14 +180,14 @@ const WSMessagesList = ({ messages = [] }) => {
   const [openMessages, setOpenMessages] = useState(new Set());
   const userScrolledAwayRef = useRef(false);
 
-  // Toggle message open/closed state by timestamp
-  const handleMessageToggle = useCallback((timestamp) => {
+  // Toggle message open/closed state by unique ID
+  const handleMessageToggle = useCallback((msgId) => {
     setOpenMessages((prev) => {
       const next = new Set(prev);
-      if (next.has(timestamp)) {
-        next.delete(timestamp);
+      if (next.has(msgId)) {
+        next.delete(msgId);
       } else {
-        next.add(timestamp);
+        next.add(msgId);
       }
       return next;
     });
@@ -229,8 +229,9 @@ const WSMessagesList = ({ messages = [] }) => {
   }, [openMessages.size]);
 
   const renderItem = useCallback((_, msg) => {
-    const isOpen = openMessages.has(msg.timestamp);
-    return <WSMessageItem message={msg} isOpen={isOpen} onToggle={handleMessageToggle} />;
+    const msgId = msg.seq !== undefined && msg.seq !== null ? String(msg.seq) : `${msg.type}-${msg.timestamp}`;
+    const isOpen = openMessages.has(msgId);
+    return <WSMessageItem message={msg} isOpen={isOpen} onToggle={() => handleMessageToggle(msgId)} />;
   }, [openMessages, handleMessageToggle]);
 
   const computeItemKey = useCallback((_, msg) => {

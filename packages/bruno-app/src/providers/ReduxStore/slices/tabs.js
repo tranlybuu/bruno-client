@@ -214,6 +214,13 @@ export const tabsSlice = createSlice({
         tab.requestPaneTab = action.payload.requestPaneTab;
       }
     },
+    updateActiveWsMessageIndex: (state, action) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+
+      if (tab) {
+        tab.activeWsMessageIndex = action.payload.activeWsMessageIndex;
+      }
+    },
     updateResponsePaneTab: (state, action) => {
       const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
 
@@ -514,6 +521,7 @@ export const {
   updateRequestPaneTabHeight,
   updateApiSpecTabLeftPaneWidth,
   updateRequestPaneTab,
+  updateActiveWsMessageIndex,
   updateResponsePaneTab,
   updateResponseFormat,
   updateResponseViewTab,

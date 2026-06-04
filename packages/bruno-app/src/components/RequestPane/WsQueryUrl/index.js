@@ -1,5 +1,5 @@
 import { IconDeviceFloppy, IconPlugConnected, IconPlugConnectedX } from '@tabler/icons';
-import SendButton from 'components/RequestPane/SendButton';
+import Button from 'ui/Button';
 import classnames from 'classnames';
 import SingleLineEditor from 'components/SingleLineEditor/index';
 import { requestUrlChanged } from 'providers/ReduxStore/slices/collections';
@@ -91,12 +91,16 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
   };
 
   const handleRunClick = async (e) => {
-    e.stopPropagation();
+    e?.stopPropagation?.();
     if (!url) {
       toast.error('Please enter a valid WebSocket URL');
       return;
     }
-    handleRun(e);
+    if (connectionStatus === 'connected') {
+      handleDisconnect(e, true);
+    } else {
+      handleConnect();
+    }
   };
 
   const onSave = (finalValue) => {
@@ -135,7 +139,7 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
             placeholder="ws://localhost:8080 or wss://example.com"
             className="w-full"
             theme={displayedTheme}
-            onRun={handleRun}
+            onRun={handleRunClick}
             collection={collection}
             item={item}
           />
@@ -191,10 +195,30 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
           </div>
           {connectionStatus === CONNECTION_STATUS.CONNECTED && <div className="connection-status-strip"></div>}
         </div>
-        <SendButton
-          onSend={handleRunClick}
-          testId="run-button"
-        />
+        <div className="connection-button-wrapper ml-2">
+          {connectionStatus === 'connected' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              color="primary"
+              onClick={(e) => handleDisconnect(e, true)}
+              data-testid="run-button"
+            >
+              Disconnect
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="filled"
+              color="primary"
+              onClick={handleConnect}
+              disabled={connectionStatus === CONNECTION_STATUS.CONNECTING}
+              data-testid="run-button"
+            >
+              {connectionStatus === CONNECTION_STATUS.CONNECTING ? 'Connecting' : 'Connect'}
+            </Button>
+          )}
+        </div>
       </div>
     </StyledWrapper>
   );

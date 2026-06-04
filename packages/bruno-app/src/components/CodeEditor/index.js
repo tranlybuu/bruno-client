@@ -245,6 +245,11 @@ class CodeEditor extends React.Component {
           this.props.onScroll(this._lastScrollTop);
         }
       });
+      editor.on('focus', () => {
+        if (this.props.onFocus && typeof this.props.onFocus === 'function') {
+          this.props.onFocus();
+        }
+      });
       this.addOverlay();
 
       const getAllVariablesHandler = () => getAllVariables(this.props.collection, this.props.item);

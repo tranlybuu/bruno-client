@@ -543,7 +543,9 @@ const wsRequestSchema = Yup.object({
         Yup.object({
           name: Yup.string().nullable(),
           type: Yup.string().nullable(),
-          content: Yup.string().nullable()
+          content: Yup.string().nullable(),
+          sendOnConnect: Yup.boolean().nullable().optional(),
+          delay: Yup.number().nullable().optional()
         })
       )
       .nullable()

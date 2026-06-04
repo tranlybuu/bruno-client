@@ -14,7 +14,9 @@ describe('jsonToBru stringify', () => {
             {
               content: '{"foo":"bar"}',
               name: 'message 1',
-              type: 'json'
+              type: 'json',
+              sendOnConnect: true,
+              delay: 2
             }
           ]
         },
@@ -36,6 +38,8 @@ describe('jsonToBru stringify', () => {
         body:ws {
           name: message 1
           type: json
+          sendOnConnect: true
+          delay: 2
           content: '''
             {"foo":"bar"}
           '''

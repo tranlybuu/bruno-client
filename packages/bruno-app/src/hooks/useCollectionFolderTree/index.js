@@ -12,7 +12,7 @@ const buildTree = (items) => {
     return tree;
   }
 
-  const folders = filter(items, (i) => isItemAFolder(i) && !i.isTransient);
+  const folders = filter(items, (i) => isItemAFolder(i) && !i.isTransient && i.name !== '.bruno');
   const sortedFolders = sortByNameThenSequence(folders);
 
   for (const folder of sortedFolders) {

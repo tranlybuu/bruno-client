@@ -20,10 +20,13 @@ import {
   IconSettings,
   IconTerminal2,
   IconFolder,
-  IconBook
+  IconBook,
+  IconFile,
+  IconEye,
+  IconEyeOff
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
-import { toggleCollection, collapseFullCollection } from 'providers/ReduxStore/slices/collections';
+import { toggleCollection, collapseFullCollection, toggleShowOnlyRequests } from 'providers/ReduxStore/slices/collections';
 import { mountCollection, moveCollectionAndPersist, handleCollectionItemDrop, pasteItem, showInFolder, saveCollectionSecurityConfig } from 'providers/ReduxStore/slices/collections/actions';
 import { useDispatch, useSelector } from 'react-redux';
 import { addTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
@@ -31,6 +34,7 @@ import { setFocusedSidebarPath } from 'providers/ReduxStore/slices/app';
 import toast from 'react-hot-toast';
 import NewRequest from 'components/Sidebar/NewRequest';
 import NewFolder from 'components/Sidebar/NewFolder';
+import NewFile from 'components/Sidebar/NewFile';
 import CollectionItem from './CollectionItem';
 import RemoveCollection from './RemoveCollection';
 import { doesCollectionHaveItemsMatchingSearchText } from 'utils/collections/search';
@@ -64,6 +68,7 @@ const Collection = ({ collection, searchText }) => {
   const { dropdownContainerRef } = useSidebarAccordion();
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
+  const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [showRenameCollectionModal, setShowRenameCollectionModal] = useState(false);
   const [showCloneCollectionModalOpen, setShowCloneCollectionModalOpen] = useState(false);
   const [showShareCollectionModal, setShowShareCollectionModal] = useState(false);
@@ -75,9 +80,12 @@ const Collection = ({ collection, searchText }) => {
   const dispatch = useDispatch();
   const isLoading = collection.isLoading;
   const collectionRef = useRef(null);
-  // Only count persisted requests and folders; transients and file items
-  // (bruno.json, .js scripts) don't affect empty state
-  const itemCount = collection.items?.filter((i) => !i.isTransient && (isItemARequest(i) || isItemAFolder(i))).length || 0;
+  const showOnlyRequests = collection?.showOnlyRequests;
+  const itemCount = collection.items?.filter((i) => {
+    if (i.isTransient || i.name === '.bruno') return false;
+    if (showOnlyRequests && i.type === 'file') return false;
+    return isItemARequest(i) || isItemAFolder(i);
+  }).length || 0;
 
   const isCollectionFocused = useSelector(isTabForItemActive({ itemUid: collection.uid }));
   const { hasCopiedItems } = useSelector((state) => state.app.clipboard);
@@ -322,8 +330,8 @@ const Collection = ({ collection, searchText }) => {
     return items.sort((a, b) => a.seq - b.seq);
   };
 
-  const requestItems = sortItemsBySequence(filter(collection.items, (i) => isItemARequest(i) && !i.isTransient));
-  const folderItems = sortByNameThenSequence(filter(collection.items, (i) => isItemAFolder(i) && !i.isTransient));
+  const requestItems = sortItemsBySequence(filter(collection.items, (i) => isItemARequest(i) && !i.isTransient && !(showOnlyRequests && i.type === 'file')));
+  const folderItems = sortByNameThenSequence(filter(collection.items, (i) => isItemAFolder(i) && !i.isTransient && i.name !== '.bruno'));
   const showEmptyCollectionMessage = showEmptyState && !hasSearchText;
 
   const emptyStateMenuItems = createEmptyStateMenuItems({ dispatch, collection, itemUid: null });
@@ -336,6 +344,15 @@ const Collection = ({ collection, searchText }) => {
       onClick: () => {
         ensureCollectionIsMounted();
         setShowNewRequestModal(true);
+      }
+    },
+    {
+      id: 'new-file',
+      leftSection: IconFile,
+      label: 'New File',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        setShowNewFileModal(true);
       }
     },
     {
@@ -421,6 +438,14 @@ const Collection = ({ collection, searchText }) => {
       onClick: handleShowInFolder
     },
     {
+      id: 'toggle-show-files',
+      leftSection: showOnlyRequests ? IconEye : IconEyeOff,
+      label: showOnlyRequests ? 'Show All Files' : 'Show Only Requests',
+      onClick: () => {
+        dispatch(toggleShowOnlyRequests({ collectionUid: collection.uid }));
+      }
+    },
+    {
       id: 'divider-1',
       type: 'divider'
     },
@@ -453,6 +478,7 @@ const Collection = ({ collection, searchText }) => {
     <StyledWrapper className="flex flex-col" id={`collection-${collection.name.replace(/\s+/g, '-').toLowerCase()}`}>
       {showNewRequestModal && <NewRequest collectionUid={collection.uid} onClose={() => setShowNewRequestModal(false)} />}
       {showNewFolderModal && <NewFolder collectionUid={collection.uid} onClose={() => setShowNewFolderModal(false)} />}
+      {showNewFileModal && <NewFile collectionUid={collection.uid} onClose={() => setShowNewFileModal(false)} />}
       {showRenameCollectionModal && (
         <RenameCollection collectionUid={collection.uid} onClose={() => setShowRenameCollectionModal(false)} />
       )}

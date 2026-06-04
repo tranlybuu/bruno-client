@@ -1547,6 +1547,13 @@ const registerNetworkIpc = (mainWindow) => {
           folderRequests = sortByNameThenSequence(folderRequests);
         }
 
+        // Skip markdown files from runner
+        folderRequests = folderRequests.filter((item) => {
+          const name = item.name || '';
+          const pathname = item.pathname || '';
+          return !(name.toLowerCase().endsWith('.md') || pathname.toLowerCase().endsWith('.md'));
+        });
+
         // Filter requests based on tags
         if (tags && tags.include && tags.exclude) {
           const includeTags = tags.include ? tags.include : [];
