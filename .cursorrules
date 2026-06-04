@@ -1,0 +1,12 @@
+# Project Rules & Guidelines
+
+## Code Search and Intelligence (CodeGraph)
+This project is configured with a CodeGraph MCP server (`codegraph_*` tools) and a local index in `.codegraph/`.
+Whenever you need to search, explore, trace, or understand the codebase structure, you MUST prioritize using the CodeGraph tools instead of running custom `grep` commands or manually looping file reads.
+
+### Guidelines:
+- **Structural Queries**: Use `codegraph_search` (finding symbols), `codegraph_callers` / `codegraph_callees` (call hierarchy), `codegraph_impact` (impact/refactoring blast-radius analysis), `codegraph_node` (fetch symbol definitions/docstrings), and `codegraph_context` (task/feature context).
+- **Avoid Grep Loops**: Do not perform manual grepping loops or file-reading loops to search for symbols. Codegraph has already done this indexing.
+- **Literal Text Queries**: Use native search (`grep_search`) only for literal string contents, comments, or log messages.
+
+For more details, see the rule file at [.cursor/rules/codegraph.mdc](file:///Users/boo/Documents/dev/os/bruno/.cursor/rules/codegraph.mdc).
