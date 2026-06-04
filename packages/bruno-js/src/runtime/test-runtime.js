@@ -51,7 +51,8 @@ class TestRuntime {
       collectionName,
       promptVariables,
       certsAndProxyConfig,
-      requestUrl: request?.url
+      requestUrl: request?.url,
+      activeEnvironmentName: request?.activeEnvironmentName
     });
     const req = new BrunoRequest(request);
     const res = new BrunoResponse(response);
@@ -129,6 +130,7 @@ class TestRuntime {
       runtimeVariables: cleanJson(runtimeVariables),
       globalEnvironmentVariables: cleanJson(globalEnvironmentVariables),
       persistentEnvVariables: cleanJson(bru.persistentEnvVariables),
+      persistentEnvVariablesWithEnv: cleanJson(bru.persistentEnvVariablesWithEnv),
       oauth2CredentialsToReset: bru.oauth2CredentialsToReset,
       results: cleanJson(__brunoTestResults.getResults()),
       nextRequestName: bru.nextRequest,

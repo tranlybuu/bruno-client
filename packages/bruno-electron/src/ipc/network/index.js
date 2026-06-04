@@ -556,12 +556,14 @@ const registerNetworkIpc = (mainWindow) => {
         envVariables: scriptResult.envVariables,
         runtimeVariables: scriptResult.runtimeVariables,
         persistentEnvVariables: scriptResult.persistentEnvVariables,
+        persistentEnvVariablesWithEnv: scriptResult.persistentEnvVariablesWithEnv,
         requestUid,
         collectionUid
       });
 
       mainWindow.webContents.send('main:persistent-env-variables-update', {
         persistentEnvVariables: scriptResult.persistentEnvVariables,
+        persistentEnvVariablesWithEnv: scriptResult.persistentEnvVariablesWithEnv,
         collectionUid
       });
 
@@ -666,12 +668,14 @@ const registerNetworkIpc = (mainWindow) => {
           envVariables: result.envVariables,
           runtimeVariables: result.runtimeVariables,
           persistentEnvVariables: result.persistentEnvVariables,
+          persistentEnvVariablesWithEnv: result.persistentEnvVariablesWithEnv,
           requestUid,
           collectionUid
         });
 
         mainWindow.webContents.send('main:persistent-env-variables-update', {
           persistentEnvVariables: result.persistentEnvVariables,
+          persistentEnvVariablesWithEnv: result.persistentEnvVariablesWithEnv,
           collectionUid
         });
 
@@ -711,12 +715,14 @@ const registerNetworkIpc = (mainWindow) => {
         envVariables: scriptResult.envVariables,
         runtimeVariables: scriptResult.runtimeVariables,
         persistentEnvVariables: scriptResult.persistentEnvVariables,
+        persistentEnvVariablesWithEnv: scriptResult.persistentEnvVariablesWithEnv,
         requestUid,
         collectionUid
       });
 
       mainWindow.webContents.send('main:persistent-env-variables-update', {
         persistentEnvVariables: scriptResult.persistentEnvVariables,
+        persistentEnvVariablesWithEnv: scriptResult.persistentEnvVariablesWithEnv,
         collectionUid
       });
 
@@ -732,6 +738,23 @@ const registerNetworkIpc = (mainWindow) => {
       mainWindow.webContents.send('main:cookies-update', safeParseJSON(safeStringifyJSON(domainsWithCookiesPost)));
     }
     return scriptResult;
+  };
+
+  const getActiveEnvironmentNameFromFs = (collectionPath) => {
+    try {
+      const fs = require('fs');
+      const envJsPath = path.join(collectionPath, 'env.js');
+      if (fs.existsSync(envJsPath)) {
+        const content = fs.readFileSync(envJsPath, 'utf8');
+        const match = content.match(/activeEnv\s*:\s*["']([^"']+)["']/);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    } catch (e) {
+      console.error('Failed to read activeEnv from env.js:', e);
+    }
+    return null;
   };
 
   const runRequest = async ({ item, collection, envVars, processEnvVars, runtimeVariables, runInBackground = false, callerBru = null, parentExecutionMode = null, parentRunnerEventData = null }) => {
@@ -865,8 +888,16 @@ const registerNetworkIpc = (mainWindow) => {
       cancelTokenUid
     });
 
+    const activeEnv = collection.environments?.find((e) => e.uid === collection.activeEnvironmentUid);
+    let activeEnvironmentName = activeEnv ? activeEnv.name : null;
+
+    if (!activeEnvironmentName && collectionPath) {
+      activeEnvironmentName = getActiveEnvironmentNameFromFs(collectionPath);
+    }
+
     const abortController = new AbortController();
     const request = await prepareRequest(item, collection, abortController);
+    request.activeEnvironmentName = activeEnvironmentName;
     request.__bruno__executionMode = 'standalone';
     request.responseType = 'stream';
     // flag to see if the stream needs to be handled as an actual stream or
@@ -1212,12 +1243,15 @@ const registerNetworkIpc = (mainWindow) => {
           mainWindow.webContents.send('main:script-environment-update', {
             envVariables: testResults.envVariables,
             runtimeVariables: testResults.runtimeVariables,
+            persistentEnvVariables: testResults.persistentEnvVariables,
+            persistentEnvVariablesWithEnv: testResults.persistentEnvVariablesWithEnv,
             requestUid,
             collectionUid
           });
 
           mainWindow.webContents.send('main:persistent-env-variables-update', {
             persistentEnvVariables: testResults.persistentEnvVariables,
+            persistentEnvVariablesWithEnv: testResults.persistentEnvVariablesWithEnv,
             collectionUid
           });
 

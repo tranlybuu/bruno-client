@@ -63,4 +63,33 @@ describe('Bru.setEnvVar', () => {
     const bru = makeBru();
     expect(() => bru.setEnvVar('invalid key', 'v')).toThrow(/contains invalid characters/);
   });
+
+  test('setPersistEnvName writes to persistentEnvVariablesWithEnv', () => {
+    const bru = makeBru();
+    bru.setPersistEnvName('my-env');
+    bru.setEnvVar('key', 'value');
+    expect(bru.persistentEnvVariablesWithEnv['my-env'].key).toBe('value');
+    expect(bru.persistentEnvVariables.key).toBeUndefined();
+  });
+
+  test('activeEnvironmentName in constructor automatically configures persistence', () => {
+    const bru = new Bru({
+      runtime: 'quickjs',
+      envVariables: {},
+      runtimeVariables: {},
+      processEnvVars: {},
+      collectionPath: '/',
+      collectionName: 'SLM',
+      activeEnvironmentName: 'local'
+    });
+
+    // Test setVar automatically persists to local
+    bru.setVar('conversation_id', 10);
+    expect(bru.runtimeVariables.conversation_id).toBe(10);
+    expect(bru.persistentEnvVariablesWithEnv['local'].conversation_id).toBe(10);
+
+    // Test setEnvVar does not throw for non-string (like objects/numbers) when auto-persisted
+    expect(() => bru.setEnvVar('port', 8080)).not.toThrow();
+    expect(bru.persistentEnvVariablesWithEnv['local'].port).toBe(8080);
+  });
 });

@@ -51,7 +51,8 @@ class ScriptRuntime {
       collectionName,
       promptVariables,
       certsAndProxyConfig,
-      requestUrl: request?.url
+      requestUrl: request?.url,
+      activeEnvironmentName: request?.activeEnvironmentName
     });
     const req = new BrunoRequest(request);
 
@@ -92,6 +93,7 @@ class ScriptRuntime {
       envVariables: cleanJson(envVariables),
       runtimeVariables: cleanJson(runtimeVariables),
       persistentEnvVariables: bru.persistentEnvVariables,
+      persistentEnvVariablesWithEnv: bru.persistentEnvVariablesWithEnv,
       globalEnvironmentVariables: cleanJson(globalEnvironmentVariables),
       oauth2CredentialsToReset: bru.oauth2CredentialsToReset,
       results: cleanJson(__brunoTestResults.getResults()),
@@ -185,7 +187,8 @@ class ScriptRuntime {
       collectionName,
       promptVariables,
       certsAndProxyConfig,
-      requestUrl: request?.url
+      requestUrl: request?.url,
+      activeEnvironmentName: request?.activeEnvironmentName
     });
     const req = new BrunoRequest(request);
     const res = new BrunoResponse(response);
@@ -227,6 +230,7 @@ class ScriptRuntime {
       response,
       envVariables: cleanJson(envVariables),
       persistentEnvVariables: cleanJson(bru.persistentEnvVariables),
+      persistentEnvVariablesWithEnv: cleanJson(bru.persistentEnvVariablesWithEnv),
       runtimeVariables: cleanJson(runtimeVariables),
       globalEnvironmentVariables: cleanJson(globalEnvironmentVariables),
       oauth2CredentialsToReset: bru.oauth2CredentialsToReset,

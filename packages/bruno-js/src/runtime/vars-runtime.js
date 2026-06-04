@@ -49,7 +49,8 @@ class VarsRuntime {
       oauth2CredentialVariables,
       promptVariables,
       certsAndProxyConfig,
-      requestUrl: request?.url
+      requestUrl: request?.url,
+      activeEnvironmentName: request?.activeEnvironmentName
     });
     const req = new BrunoRequest(request);
     const res = createResponseParser(response);
@@ -90,6 +91,7 @@ class VarsRuntime {
       runtimeVariables,
       globalEnvironmentVariables: cleanJson(globalEnvironmentVariables),
       persistentEnvVariables: cleanJson(bru.persistentEnvVariables),
+      persistentEnvVariablesWithEnv: cleanJson(bru.persistentEnvVariablesWithEnv),
       error
     };
   }

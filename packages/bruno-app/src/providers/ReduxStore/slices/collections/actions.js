@@ -2353,8 +2353,8 @@ export const updateVariableInScope = (variableName, newValue, scopeInfo, collect
 };
 
 export const mergeAndPersistEnvironment
-  = ({ persistentEnvVariables, collectionUid }) =>
-    (_dispatch, getState) => {
+  = ({ persistentEnvVariables, persistentEnvVariablesWithEnv, collectionUid }) =>
+    (dispatch, getState) => {
       return new Promise((resolve, reject) => {
         const state = getState();
         const collection = findCollectionByUid(state.collections.collections, collectionUid);
@@ -2363,8 +2363,66 @@ export const mergeAndPersistEnvironment
           return reject(new Error('Collection not found'));
         }
 
+        const { ipcRenderer } = window;
+
+        // 1. First persist custom env variables if provided (Collection-level environments)
+        if (persistentEnvVariablesWithEnv && Object.keys(persistentEnvVariablesWithEnv).length > 0) {
+          const environments = collection.environments || [];
+
+          for (const [envName, newVars] of Object.entries(persistentEnvVariablesWithEnv)) {
+            const existingEnv = environments.find((env) => env?.name === envName);
+            if (existingEnv) {
+              let variables = cloneDeep(existingEnv.variables || []);
+              Object.entries(newVars).forEach(([name, value]) => {
+                const foundVar = variables.find((v) => v.name === name);
+                const stringifiedValue = typeof value === 'object' && value !== null ? JSON.stringify(value) : (value !== undefined && value !== null ? value.toString() : '');
+                if (foundVar) {
+                  foundVar.value = stringifiedValue;
+                } else {
+                  variables.push({
+                    uid: uuid(),
+                    name,
+                    value: stringifiedValue,
+                    type: 'text',
+                    secret: false,
+                    enabled: true
+                  });
+                }
+              });
+
+              const environmentToSave = {
+                name: existingEnv.name,
+                variables
+              };
+              ipcRenderer
+                .invoke('renderer:save-environment', collection.pathname, environmentToSave)
+                .catch((err) => console.error('Failed to save collection environment:', err));
+            } else {
+              const variables = Object.entries(newVars).map(([name, value]) => {
+                const stringifiedValue = typeof value === 'object' && value !== null ? JSON.stringify(value) : (value !== undefined && value !== null ? value.toString() : '');
+                return {
+                  uid: uuid(),
+                  name,
+                  value: stringifiedValue,
+                  type: 'text',
+                  secret: false,
+                  enabled: true
+                };
+              });
+              ipcRenderer
+                .invoke('renderer:create-environment', collection.pathname, envName, variables)
+                .catch((err) => console.error('Failed to create collection environment:', err));
+            }
+          }
+        }
+
+        // 2. Persist normal active environment variables
         const environmentUid = collection.activeEnvironmentUid;
         if (!environmentUid) {
+          // If we persisted environment-specific variables, we can resolve successfully even without an active environment.
+          if (persistentEnvVariablesWithEnv && Object.keys(persistentEnvVariablesWithEnv).length > 0) {
+            return resolve();
+          }
           return reject(new Error('No active environment found'));
         }
 
@@ -2416,7 +2474,6 @@ export const mergeAndPersistEnvironment
         const environmentToSave = cloneDeep(environment);
         environmentToSave.variables = buildPersistedEnvVariables(merged, { mode: 'merge', persistedNames });
 
-        const { ipcRenderer } = window;
         environmentSchema
           .validate(environmentToSave)
           .then(() => ipcRenderer.invoke('renderer:save-environment', collection.pathname, environmentToSave))

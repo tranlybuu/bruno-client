@@ -1,7 +1,6 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { cloneDeep } from 'lodash';
-import * as FileSaver from 'file-saver';
 import jsyaml from 'js-yaml';
 import jsesc from 'jsesc';
 import toast from 'react-hot-toast';
@@ -15,6 +14,7 @@ import { transformCollectionToSaveToExportAsFile, findCollectionByUid, areItemsL
 import { brunoToOpenCollection } from '@usebruno/converters';
 import { sanitizeName } from 'utils/common/regex';
 import { escapeHtml } from 'utils/response';
+import path from 'utils/common/path';
 
 const CDN_BASE_URL = 'https://cdn.opencollection.com';
 
@@ -36,6 +36,22 @@ const buildHtmlDocument = (collectionName, escapedYamlContent) => `<!DOCTYPE htm
     </style>
     <link rel="stylesheet" href="${CDN_BASE_URL}/docs.css">
     <script src="${CDN_BASE_URL}/docs.js"></script>
+    <script>
+        if (typeof window !== 'undefined') {
+            if (!window.__brunoLoadLocalModule) {
+                window.__brunoLoadLocalModule = function(mod) {
+                    return 'module.exports = () => ({});';
+                };
+            }
+            if (!window.require) {
+                const dummy = new Proxy(() => {}, {
+                    get: () => dummy,
+                    apply: () => dummy
+                });
+                window.require = () => dummy;
+            }
+        }
+    </script>
 </head>
 <body>
     <div id="opencollection-container"></div>
@@ -72,7 +88,41 @@ const GenerateDocumentation = ({ onClose, collectionUid }) => {
     [collection]
   );
 
-  const handleGenerate = useCallback(() => {
+  const [fileName, setFileName] = useState('');
+
+  useEffect(() => {
+    if (!collection) return;
+
+    const baseName = sanitizeName(collection.name);
+    const ext = '.html';
+    const baseDocName = `${baseName}-documentation`;
+
+    const findUniqueName = async () => {
+      let currentName = `${baseDocName}${ext}`;
+      let counter = 1;
+      const { ipcRenderer } = window;
+
+      while (true) {
+        const fullPath = path.join(collection.pathname, currentName);
+        const exists = await ipcRenderer.invoke('renderer:file-exists', { pathname: fullPath });
+        if (!exists) {
+          setFileName(currentName);
+          break;
+        }
+        currentName = `${baseDocName}-${counter}${ext}`;
+        counter++;
+      }
+    };
+
+    findUniqueName();
+  }, [collection]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!fileName || !fileName.trim()) {
+      toast.error('File name cannot be empty');
+      return;
+    }
+
     try {
       const collectionCopy = cloneDeep(collection);
       const transformedCollection = transformCollectionToSaveToExportAsFile(collectionCopy);
@@ -86,6 +136,42 @@ const GenerateDocumentation = ({ onClose, collectionUid }) => {
           exportedUsing: version ? `Bruno/${version}` : 'Bruno'
         }
       };
+
+      // Wrap scripts in try-catch to prevent browser sandbox crashes for Node-specific code (e.g. require)
+      // and inject a local module mock loader inside the VM context.
+      const processScripts = (items) => {
+        if (!items || !Array.isArray(items)) return;
+        items.forEach((item) => {
+          // Folder level scripts
+          if (item.request && item.request.scripts) {
+            item.request.scripts.forEach((script) => {
+              if (script.code) {
+                script.code = `if (typeof globalThis !== 'undefined') {\n  globalThis.__brunoLoadLocalModule = function(mod) {\n    return 'module.exports = () => ({});';\n  };\n}\ntry {\n${script.code}\n} catch (e) {\n  console.warn("Folder script error caught in documentation playground:", e);\n}`;
+              }
+            });
+          }
+          // Request level scripts
+          if (item.runtime && item.runtime.scripts) {
+            item.runtime.scripts.forEach((script) => {
+              if (script.code) {
+                script.code = `if (typeof globalThis !== 'undefined') {\n  globalThis.__brunoLoadLocalModule = function(mod) {\n    return 'module.exports = () => ({});';\n  };\n}\ntry {\n${script.code}\n} catch (e) {\n  console.warn("Request script error caught in documentation playground:", e);\n}`;
+              }
+            });
+          }
+          if (item.items) {
+            processScripts(item.items);
+          }
+        });
+      };
+
+      if (openCollection.request && openCollection.request.scripts) {
+        openCollection.request.scripts.forEach((script) => {
+          if (script.code) {
+            script.code = `if (typeof globalThis !== 'undefined') {\n  globalThis.__brunoLoadLocalModule = function(mod) {\n    return 'module.exports = () => ({});';\n  };\n}\ntry {\n${script.code}\n} catch (e) {\n  console.warn("Collection script error caught in documentation playground:", e);\n}`;
+          }
+        });
+      }
+      processScripts(openCollection.items);
 
       const yamlContent = jsyaml.dump(openCollection, {
         indent: 2,
@@ -105,8 +191,9 @@ const GenerateDocumentation = ({ onClose, collectionUid }) => {
         escapedYaml
       );
 
-      const fileName = `${sanitizeName(collection.name)}-documentation.html`;
-      FileSaver.saveAs(new Blob([htmlContent], { type: 'text/html' }), fileName);
+      const targetPath = path.join(collection.pathname, fileName.trim());
+      const { ipcRenderer } = window;
+      await ipcRenderer.invoke('renderer:write-file-content', { pathname: targetPath, content: htmlContent });
 
       toast.success('Documentation generated successfully');
       onClose();
@@ -114,7 +201,7 @@ const GenerateDocumentation = ({ onClose, collectionUid }) => {
       console.error('Error generating documentation:', error);
       toast.error('Failed to generate documentation');
     }
-  }, [collection, version, onClose]);
+  }, [collection, version, onClose, fileName]);
 
   if (!collection) {
     return <CollectionNotFound onClose={onClose} />;
@@ -143,8 +230,27 @@ const GenerateDocumentation = ({ onClose, collectionUid }) => {
               <span>Interactive API Documentation</span>
             </h3>
             <p className="description mb-4">
-              Generate a standalone HTML file that can be hosted anywhere or shared with your team.
+              Generate a standalone HTML file in the collection directory.
             </p>
+
+            <div className="flex flex-col mb-4">
+              <label htmlFor="fileName" className="block font-medium text-sm">
+                File Name
+              </label>
+              <input
+                id="file-name"
+                type="text"
+                name="fileName"
+                className="block textbox mt-2 w-full"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                onChange={(e) => setFileName(e.target.value)}
+                value={fileName}
+                placeholder="e.g. SLM-documentation.html"
+              />
+            </div>
 
             <div className="preview-container relative mb-4">
               <span className="preview-label absolute">Sample Output</span>

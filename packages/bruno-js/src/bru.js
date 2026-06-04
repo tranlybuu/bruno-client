@@ -44,7 +44,8 @@ class Bru {
     collectionName,
     promptVariables,
     certsAndProxyConfig,
-    requestUrl
+    requestUrl,
+    activeEnvironmentName
   }) {
     this.envVariables = envVariables || {};
     this.runtimeVariables = runtimeVariables || {};
@@ -78,6 +79,8 @@ class Bru {
     });
     // Holds variables that are marked as persistent by scripts
     this.persistentEnvVariables = {};
+    this.persistentEnvVariablesWithEnv = {};
+    this._persistEnvName = activeEnvironmentName || null;
     // Holds credential IDs to be reset after script execution
     this.oauth2CredentialsToReset = [];
     this.runner = {
@@ -192,6 +195,10 @@ class Bru {
     return this.interpolate(this.envVariables[key]);
   }
 
+  setPersistEnvName(envName) {
+    this._persistEnvName = envName;
+  }
+
   setEnvVar(key, value, options = {}) {
     if (!key) {
       throw new Error('Creating a env variable without specifying a name is not allowed.');
@@ -203,6 +210,9 @@ class Bru {
       );
     }
 
+    const persist = options?.persist || (this._persistEnvName ? true : false);
+    const envName = options?.envName || this._persistEnvName;
+
     // When persist is true, only string values are allowed
     if (options?.persist && typeof value !== 'string') {
       throw new Error(`Persistent environment variables must be strings. Received ${typeof value} for key "${key}".`);
@@ -210,8 +220,15 @@ class Bru {
 
     this.envVariables[key] = value;
 
-    if (options?.persist) {
-      this.persistentEnvVariables[key] = value;
+    if (persist) {
+      if (envName) {
+        if (!this.persistentEnvVariablesWithEnv[envName]) {
+          this.persistentEnvVariablesWithEnv[envName] = {};
+        }
+        this.persistentEnvVariablesWithEnv[envName][key] = value;
+      } else {
+        this.persistentEnvVariables[key] = value;
+      }
     } else {
       if (this.persistentEnvVariables[key]) {
         delete this.persistentEnvVariables[key];
@@ -303,7 +320,7 @@ class Bru {
     return Object.hasOwn(this.runtimeVariables, key);
   }
 
-  setVar(key, value) {
+  setVar(key, value, options = {}) {
     if (!key) {
       throw new Error('Creating a variable without specifying a name is not allowed.');
     }
@@ -316,6 +333,20 @@ class Bru {
     }
 
     this.runtimeVariables[key] = value;
+
+    const persist = options?.persist || (this._persistEnvName ? true : false);
+    const envName = options?.envName || this._persistEnvName;
+
+    if (persist) {
+      if (envName) {
+        if (!this.persistentEnvVariablesWithEnv[envName]) {
+          this.persistentEnvVariablesWithEnv[envName] = {};
+        }
+        this.persistentEnvVariablesWithEnv[envName][key] = value;
+      } else {
+        this.persistentEnvVariables[key] = value;
+      }
+    }
   }
 
   getVar(key) {

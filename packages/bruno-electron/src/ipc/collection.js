@@ -442,6 +442,16 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
     }
   });
 
+  // check file exists
+  ipcMain.handle('renderer:file-exists', async (event, { pathname }) => {
+    try {
+      validatePathIsInsideCollection(pathname);
+      return fs.existsSync(pathname);
+    } catch (error) {
+      return false;
+    }
+  });
+
   // read history
   ipcMain.handle('renderer:read-history', async (event, { collectionPath }) => {
     try {

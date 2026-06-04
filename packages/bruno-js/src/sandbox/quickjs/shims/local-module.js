@@ -4,6 +4,9 @@ const { marshallToVm } = require('../utils');
 
 const addLocalModuleLoaderShimToContext = (vm, collectionPath) => {
   let loadLocalModuleHandle = vm.newFunction('loadLocalModule', function (module) {
+    if (!fs || typeof fs.existsSync !== 'function' || typeof fs.readFileSync !== 'function') {
+      return marshallToVm('module.exports = () => ({});', vm);
+    }
     const filename = vm.dump(module);
 
     // Check if the filename has an extension
