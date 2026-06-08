@@ -19,11 +19,12 @@ import {
   IconSettings,
   IconInfoCircle,
   IconTerminal2,
-  IconFile
+  IconFile,
+  IconSortAscendingLetters
 } from '@tabler/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { addTab, focusTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
-import { handleCollectionItemDrop, sendRequest, showInFolder, pasteItem, saveRequest } from 'providers/ReduxStore/slices/collections/actions';
+import { handleCollectionItemDrop, sendRequest, showInFolder, pasteItem, saveRequest, sortFolderItemsAlphabetically } from 'providers/ReduxStore/slices/collections/actions';
 import { toggleCollectionItem, addResponseExample } from 'providers/ReduxStore/slices/collections';
 import { insertTaskIntoQueue } from 'providers/ReduxStore/slices/app';
 import { uuid } from 'utils/common';
@@ -355,6 +356,14 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
           onClick: () => setNewFolderModalOpen(true)
         },
         {
+          id: 'sort-items',
+          leftSection: IconSortAscendingLetters,
+          label: 'Sort (A-Z 0-9)',
+          onClick: () => {
+            dispatch(sortFolderItemsAlphabetically({ collectionUid, folderUid: item.uid }));
+          }
+        },
+        {
           id: 'run',
           leftSection: IconPlayerPlay,
           label: 'Run',
@@ -378,7 +387,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
       }
     );
 
-    if (isFolder && hasCopiedItems) {
+    if (hasCopiedItems) {
       items.push({
         id: 'paste',
         leftSection: IconClipboard,
@@ -586,7 +595,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
 
   const handleCopyItem = () => {
     dispatch(copyRequest(item));
-    const itemType = isFolder ? 'Folder' : 'Request';
+    const isFile = item?.type === 'file';
+    const itemType = isFolder ? 'Folder' : (isFile ? 'File' : 'Request');
     toast.success(`${itemType} copied`);
   };
 

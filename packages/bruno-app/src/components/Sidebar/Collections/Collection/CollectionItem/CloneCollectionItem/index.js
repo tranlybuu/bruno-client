@@ -20,6 +20,7 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
   const dispatch = useDispatch();
   const collection = useSelector((state) => state.collections.collections?.find((c) => c.uid === collectionUid));
   const isFolder = isItemAFolder(item);
+  const isFile = item?.type === 'file';
   const inputRef = useRef();
   const [isEditing, toggleEditing] = useState(false);
   const itemName = item?.name;
@@ -29,11 +30,14 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
   const dropdownTippyRef = useRef();
   const onDropdownCreate = (ref) => (dropdownTippyRef.current = ref);
 
+  const fileExt = isFile && item?.name ? path.extname(item.name) : '';
+  const baseName = fileExt ? item.name.slice(0, -fileExt.length) : item.name;
+
   const formik = useFormik({
     enableReinitialize: true,
     initialValues: {
-      name: `${itemName} copy`,
-      filename: `${sanitizeName(itemName)} copy`
+      name: isFile ? `${baseName} copy${fileExt}` : `${itemName} copy`,
+      filename: isFile ? `${sanitizeName(baseName)} copy` : `${sanitizeName(itemName)} copy`
     },
     validationSchema: Yup.object({
       name: Yup.string()
@@ -53,11 +57,11 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
     onSubmit: (values) => {
       dispatch(cloneItem(values.name, values.filename, item.uid, collectionUid))
         .then(() => {
-          toast.success('Request cloned!');
+          toast.success(isFile ? 'File cloned!' : 'Request cloned!');
           onClose();
         })
         .catch((err) => {
-          toast.error(err ? err.message : 'An error occurred while cloning the request');
+          toast.error(err ? err.message : `An error occurred while cloning the ${isFile ? 'file' : 'request'}`);
         });
     }
   });
@@ -87,14 +91,14 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
       <StyledWrapper>
         <Modal
           size="md"
-          title={`Clone ${isFolder ? 'Folder' : 'Request'}`}
+          title={`Clone ${isFolder ? 'Folder' : (isFile ? 'File' : 'Request')}`}
           handleCancel={onClose}
           hideFooter
         >
           <form className="bruno-form" onSubmit={formik.handleSubmit}>
             <div>
               <label htmlFor="name" className="block font-medium">
-                {isFolder ? 'Folder' : 'Request'} Name
+                {isFolder ? 'Folder' : (isFile ? 'File' : 'Request')} Name
               </label>
               <input
                 id="collection-item-name"
@@ -109,7 +113,13 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
                 spellCheck="false"
                 onChange={(e) => {
                   formik.setFieldValue('name', e.target.value);
-                  !isEditing && formik.setFieldValue('filename', sanitizeName(e.target.value));
+                  if (isFile) {
+                    const ext = path.extname(e.target.value);
+                    const base = ext ? e.target.value.slice(0, -ext.length) : e.target.value;
+                    !isEditing && formik.setFieldValue('filename', sanitizeName(base));
+                  } else {
+                    !isEditing && formik.setFieldValue('filename', sanitizeName(e.target.value));
+                  }
                 }}
                 value={formik.values.name || ''}
               />
@@ -169,7 +179,11 @@ const CloneCollectionItem = ({ collectionUid, item, onClose }) => {
                       onChange={formik.handleChange}
                       value={formik.values.filename || ''}
                     />
-                    {itemType !== 'folder' && <span className="absolute right-2 top-4 flex justify-center items-center file-extension">.{collection?.format || 'bru'}</span>}
+                    {itemType !== 'folder' && (
+                      <span className="absolute right-2 top-4 flex justify-center items-center file-extension">
+                        {isFile ? fileExt : `.${collection?.format || 'bru'}`}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div className="relative flex flex-row gap-1 items-center justify-between">

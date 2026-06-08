@@ -23,11 +23,12 @@ import {
   IconBook,
   IconFile,
   IconEye,
-  IconEyeOff
+  IconEyeOff,
+  IconSortAscendingLetters
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
 import { toggleCollection, collapseFullCollection, toggleShowOnlyRequests } from 'providers/ReduxStore/slices/collections';
-import { mountCollection, moveCollectionAndPersist, handleCollectionItemDrop, pasteItem, showInFolder, saveCollectionSecurityConfig } from 'providers/ReduxStore/slices/collections/actions';
+import { mountCollection, moveCollectionAndPersist, handleCollectionItemDrop, pasteItem, showInFolder, saveCollectionSecurityConfig, sortFolderItemsAlphabetically } from 'providers/ReduxStore/slices/collections/actions';
 import { useDispatch, useSelector } from 'react-redux';
 import { addTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
 import { setFocusedSidebarPath } from 'providers/ReduxStore/slices/app';
@@ -362,6 +363,15 @@ const Collection = ({ collection, searchText }) => {
       onClick: () => {
         ensureCollectionIsMounted();
         setShowNewFolderModal(true);
+      }
+    },
+    {
+      id: 'sort-items',
+      leftSection: IconSortAscendingLetters,
+      label: 'Sort (A-Z 0-9)',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        dispatch(sortFolderItemsAlphabetically({ collectionUid: collection.uid }));
       }
     },
     {

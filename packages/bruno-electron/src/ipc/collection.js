@@ -452,6 +452,18 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
     }
   });
 
+  // copy file
+  ipcMain.handle('renderer:copy-file', async (event, { srcPath, destPath }) => {
+    try {
+      validatePathIsInsideCollection(srcPath);
+      validatePathIsInsideCollection(destPath);
+      fsExtra.copySync(srcPath, destPath);
+      return { success: true };
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
+
   // read history
   ipcMain.handle('renderer:read-history', async (event, { collectionPath }) => {
     try {
@@ -1414,6 +1426,14 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
             const filePath = path.join(currentPath, newFilename);
 
             safeWriteFileSync(filePath, content);
+          }
+          if (item.type === 'file') {
+            const filePath = path.join(currentPath, item.filename || path.basename(item.pathname));
+            try {
+              fsExtra.copySync(item.pathname, filePath);
+            } catch (copyErr) {
+              console.error(`Failed to copy file: ${item.pathname} to ${filePath}`, copyErr);
+            }
           }
           if (item.type === 'folder') {
             const folderPath = path.join(currentPath, item.filename);

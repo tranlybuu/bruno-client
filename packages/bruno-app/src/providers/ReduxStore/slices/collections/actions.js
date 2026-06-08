@@ -993,6 +993,39 @@ export const cloneItem = (newName, newFilename, itemUid, collectionUid) => (disp
       return;
     }
 
+    if (item.type === 'file') {
+      const parentFolder = findParentItemInCollection(collection, item.uid) || collection;
+      const ext = path.extname(item.pathname);
+      const filename = newFilename.endsWith(ext) ? newFilename : `${newFilename}${ext}`;
+
+      const fileWithSameNameExists = find(
+        parentFolder.items,
+        (i) => trim(i?.filename) === trim(filename)
+      );
+
+      if (fileWithSameNameExists) {
+        return reject(new Error('Duplicate file names under same parent folder are not allowed'));
+      }
+
+      const fullPathname = path.join(parentFolder.pathname, filename);
+      const { ipcRenderer } = window;
+
+      ipcRenderer.invoke('renderer:copy-file', { srcPath: item.pathname, destPath: fullPathname })
+        .then(() => {
+          dispatch(
+            insertTaskIntoQueue({
+              uid: uuid(),
+              type: 'OPEN_REQUEST',
+              collectionUid,
+              itemPathname: fullPathname
+            })
+          );
+          resolve();
+        })
+        .catch(reject);
+      return;
+    }
+
     const parentItem = findParentItemInCollection(collectionCopy, itemUid);
     const filename = resolveRequestFilename(newFilename, collection.format);
     const itemToSave = refreshUidsInItem(transformRequestToSaveToFilesystem(item));
@@ -1111,6 +1144,21 @@ export const pasteItem = (targetCollectionUid, targetItemUid = null) => (dispatc
           const { ipcRenderer } = window;
 
           await ipcRenderer.invoke('renderer:clone-folder', copiedItem, fullPathname, targetCollection.pathname);
+        } else if (copiedItem.type === 'file') {
+          // Handle file pasting
+          const { newName, newFilename } = generateUniqueName(copiedItem.name, existingItems, false);
+
+          const fullPathname = path.join(targetParentPathname, newFilename);
+          const { ipcRenderer } = window;
+
+          await ipcRenderer.invoke('renderer:copy-file', { srcPath: copiedItem.pathname, destPath: fullPathname });
+
+          dispatch(insertTaskIntoQueue({
+            uid: uuid(),
+            type: 'OPEN_REQUEST',
+            collectionUid: targetCollectionUid,
+            itemPathname: fullPathname
+          }));
         } else {
           // Handle request pasting
           // Generate unique name for request
@@ -3428,4 +3476,67 @@ export const closeTabs = ({ tabUids }) => async (dispatch, getState) => {
 export const reopenClosedTab = ({ collectionUid } = {}) => async (dispatch) => {
   dispatch(reopenLastClosedTab({ collectionUid }));
   await dispatch(ensureActiveTabInCurrentWorkspace());
+};
+
+export const sortFolderItemsAlphabetically = ({ collectionUid, folderUid }) => (dispatch, getState) => {
+  const state = getState();
+  const collection = findCollectionByUid(state.collections.collections, collectionUid);
+
+  if (!collection) {
+    return Promise.reject(new Error('Collection not found'));
+  }
+
+  // If folderUid is null or undefined, we sort at the root of the collection
+  const folder = folderUid ? findItemInCollection(collection, folderUid) : collection;
+  if (!folder) {
+    return Promise.reject(new Error('Folder not found'));
+  }
+
+  const items = folder.items || [];
+
+  // Filter out transient items and '.bruno' folder
+  const folderItems = items.filter((i) => isItemAFolder(i) && !i.isTransient && i.name !== '.bruno');
+  const requestItems = items.filter((i) => isItemARequest(i) && !i.isTransient);
+
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+  // Sort alphabetically by name
+  const sortedFolders = [...folderItems].sort((a, b) => collator.compare(a.name || '', b.name || ''));
+  const sortedRequests = [...requestItems].sort((a, b) => collator.compare(a.name || '', b.name || ''));
+
+  const itemsToResequence = [];
+
+  sortedFolders.forEach((item, index) => {
+    const newSeq = index + 1;
+    if (item.seq !== newSeq) {
+      itemsToResequence.push({
+        ...cloneDeep(item),
+        seq: newSeq
+      });
+    }
+  });
+
+  sortedRequests.forEach((item, index) => {
+    const newSeq = index + 1;
+    if (item.seq !== newSeq) {
+      itemsToResequence.push({
+        ...cloneDeep(item),
+        seq: newSeq
+      });
+    }
+  });
+
+  if (itemsToResequence.length === 0) {
+    toast.success('Items are already sorted');
+    return Promise.resolve();
+  }
+
+  return dispatch(updateItemsSequences({ itemsToResequence, collectionUid }))
+    .then(() => {
+      toast.success('Items sorted successfully');
+    })
+    .catch((err) => {
+      console.error(err);
+      toast.error('Failed to sort items');
+    });
 };
