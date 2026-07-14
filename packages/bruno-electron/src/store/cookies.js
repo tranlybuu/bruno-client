@@ -92,9 +92,11 @@ class CookiesStore {
             cookiesByDomain[cookie.domain] = [];
           }
 
+          // Coerce value to string to prevent encryptString from throwing on null/undefined/object
+          const cookieValue = typeof cookie.value === 'string' ? cookie.value : String(cookie.value ?? '');
           cookiesByDomain[cookie.domain].push({
             ...cookie,
-            value: encryptString(cookie.value, this.#passkey)
+            value: encryptString(cookieValue, this.#passkey)
           });
         } catch (err) {
           console.warn('Failed to process cookie for storage:', cookie?.key, err);

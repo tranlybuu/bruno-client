@@ -27,7 +27,7 @@ import {
   loadCollectionHistory
 } from 'providers/ReduxStore/slices/collections';
 import { findCollectionByPathname } from 'utils/collections/index';
-import { collectionAddEnvFileEvent, openCollectionEvent, hydrateCollectionWithUiStateSnapshot, mergeAndPersistEnvironment, saveCollectionHistory } from 'providers/ReduxStore/slices/collections/actions';
+import { collectionAddEnvFileEvent, collectionAddSharedScriptFileEvent, collectionUnlinkSharedScriptFileEvent, openCollectionEvent, hydrateCollectionWithUiStateSnapshot, mergeAndPersistEnvironment, saveCollectionHistory } from 'providers/ReduxStore/slices/collections/actions';
 import {
   workspaceOpenedEvent,
   workspaceConfigUpdatedEvent,
@@ -101,6 +101,12 @@ const useIpcEvents = () => {
       }
       if (type === 'unlinkEnvironmentFile') {
         dispatch(collectionUnlinkEnvFileEvent(val));
+      }
+      if (type === 'addSharedScriptFile') {
+        dispatch(collectionAddSharedScriptFileEvent(val));
+      }
+      if (type === 'unlinkSharedScriptFile') {
+        dispatch(collectionUnlinkSharedScriptFileEvent(val));
       }
     };
 

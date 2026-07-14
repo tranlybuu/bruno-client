@@ -19,10 +19,27 @@ parentPort?.on('message', async (message: WorkerMessage) => {
     let result: any;
 
     if (taskType === 'parse') {
+      const trimmed = data ? data.trim() : '';
       if (format === 'yml') {
-        result = parseYmlItem(data);
+        try {
+          result = parseYmlItem(data);
+        } catch (e) {
+          if (trimmed.startsWith('meta {') || trimmed.startsWith('meta\n{')) {
+            result = parseBruRequest(data);
+          } else {
+            throw e;
+          }
+        }
       } else {
-        result = parseBruRequest(data);
+        try {
+          result = parseBruRequest(data);
+        } catch (e) {
+          if (trimmed.startsWith('info:') || trimmed.startsWith('meta:')) {
+            result = parseYmlItem(data);
+          } else {
+            throw e;
+          }
+        }
       }
     } else if (taskType === 'stringify') {
       if (format === 'yml') {

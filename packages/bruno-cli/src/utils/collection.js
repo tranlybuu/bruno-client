@@ -68,14 +68,36 @@ const createCollectionJsonFromPathname = (collectionPath) => {
         }
         currentDirItems.push(folderItem);
       } else {
-        if (file === collectionFile || file === folderFile || path.extname(filePath) !== ext) continue;
-        try {
-          const requestItem = parseRequest(fs.readFileSync(filePath, 'utf8'), { format });
-          currentDirItems.push({ name: file, ...requestItem, pathname: filePath });
-        } catch (err) {
-          console.warn(chalk.yellow(`Warning: Skipping invalid file ${filePath}\nError: ${err.message}`));
-          global.brunoSkippedFiles = global.brunoSkippedFiles || [];
-          global.brunoSkippedFiles.push({ path: filePath, error: err.message });
+        if (file === collectionFile || file === folderFile) continue;
+        const fileExt = path.extname(filePath);
+        if (fileExt === ext) {
+          try {
+            const requestItem = parseRequest(fs.readFileSync(filePath, 'utf8'), { format });
+            currentDirItems.push({ name: file, ...requestItem, pathname: filePath });
+          } catch (err) {
+            console.warn(chalk.yellow(`Warning: Skipping invalid file ${filePath}\nError: ${err.message}`));
+            global.brunoSkippedFiles = global.brunoSkippedFiles || [];
+            global.brunoSkippedFiles.push({ path: filePath, error: err.message });
+          }
+        } else if (fileExt === '.bruflow') {
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const flowData = content ? JSON.parse(content) : { nodes: [], edges: [] };
+            const name = file.substring(0, file.length - 8); // removes '.bruflow'
+            currentDirItems.push({
+              name,
+              pathname: filePath,
+              type: 'flow-request',
+              seq: flowData.seq !== undefined ? flowData.seq : 1,
+              request: {
+                method: 'FLOW',
+                url: ''
+              },
+              flow: flowData
+            });
+          } catch (err) {
+            console.warn(chalk.yellow(`Warning: Skipping invalid flow file ${filePath}\nError: ${err.message}`));
+          }
         }
       }
     }

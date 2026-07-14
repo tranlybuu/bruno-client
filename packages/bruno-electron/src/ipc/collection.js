@@ -435,6 +435,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
   ipcMain.handle('renderer:write-file-content', async (event, { pathname, content }) => {
     try {
       validatePathIsInsideCollection(pathname);
+      fs.mkdirSync(path.dirname(pathname), { recursive: true });
       fs.writeFileSync(pathname, content, 'utf8');
       return { success: true };
     } catch (error) {
@@ -951,7 +952,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
 
       const format = getCollectionFormat(collectionPathname);
       if (!hasRequestExtension(itemPath, format)) {
-        throw new Error(`path: ${itemPath} is not a valid request file`);
+        return;
       }
 
       const data = fs.readFileSync(itemPath, 'utf8');
@@ -1027,7 +1028,12 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       }
 
       if (!hasRequestExtension(oldPath, format)) {
-        throw new Error(`path: ${oldPath} is not a valid request file`);
+        if (!validateName(path.basename(newPath))) {
+          throw new Error(`path: ${path.basename(newPath)} is not a valid filename`);
+        }
+        moveRequestUid(oldPath, newPath);
+        await fs.promises.rename(oldPath, newPath);
+        return newPath;
       }
 
       if (!validateName(newFilename)) {
@@ -1096,7 +1102,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
         }
 
         fs.rmSync(pathname, { recursive: true, force: true });
-      } else if (['http-request', 'graphql-request', 'grpc-request', 'ws-request', 'file'].includes(type)) {
+      } else if (['http-request', 'graphql-request', 'grpc-request', 'ws-request', 'file', 'flow-request'].includes(type)) {
         if (!fs.existsSync(pathname)) {
           return Promise.reject(new Error('The file does not exist'));
         }
@@ -1105,7 +1111,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
 
         fs.unlinkSync(pathname);
       } else {
-        return Promise.reject();
+        return Promise.reject(new Error(`Unsupported file type for deletion: ${type}`));
       }
     } catch (error) {
       return Promise.reject(error);
@@ -1260,6 +1266,15 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
               const content = await stringifyRequestViaWorker(item, { format });
               const filePath = path.join(currentPath, sanitizedFilename);
               safeWriteFileSync(filePath, content);
+            }
+            if (item.type === 'flow-request') {
+              const flowData = item.flow || { nodes: [], edges: [] };
+              if (item.seq !== undefined) {
+                flowData.seq = item.seq;
+              }
+              let sanitizedFilename = sanitizeName(item.name || item.filename || 'flow') + '.bruflow';
+              const filePath = path.join(currentPath, sanitizedFilename);
+              safeWriteFileSync(filePath, JSON.stringify(flowData, null, 2));
             }
             if (item.type === 'folder') {
               let sanitizedFolderName = sanitizeName(item?.filename || item?.name);
@@ -1417,7 +1432,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       // Recursive function to parse the folder and create files/folders
       const parseCollectionItems = (items = [], currentPath) => {
         items.forEach(async (item) => {
-          if (['http-request', 'graphql-request', 'grpc-request'].includes(item.type)) {
+          if (['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item.type)) {
             const content = await stringifyRequestViaWorker(item, { format });
 
             // Use the correct file extension based on target format
@@ -1433,6 +1448,14 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
               fsExtra.copySync(item.pathname, filePath);
             } catch (copyErr) {
               console.error(`Failed to copy file: ${item.pathname} to ${filePath}`, copyErr);
+            }
+          }
+          if (item.type === 'flow-request') {
+            const filePath = path.join(currentPath, path.basename(item.pathname));
+            try {
+              fsExtra.copySync(item.pathname, filePath);
+            } catch (copyErr) {
+              console.error(`Failed to copy flow file: ${item.pathname} to ${filePath}`, copyErr);
             }
           }
           if (item.type === 'folder') {
@@ -1508,6 +1531,13 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
             const itemToSave = transformRequestToSaveToFilesystem(item);
             const content = await stringifyRequestViaWorker(itemToSave, { format });
             await writeFile(item.pathname, content);
+          }
+        } else if (item?.type === 'flow-request') {
+          if (fs.existsSync(item.pathname)) {
+            const content = fs.readFileSync(item.pathname, 'utf8');
+            const flowData = content ? JSON.parse(content) : {};
+            flowData.seq = item.seq;
+            await writeFile(item.pathname, JSON.stringify(flowData, null, 2));
           }
         }
       }

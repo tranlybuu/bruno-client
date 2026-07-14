@@ -351,6 +351,32 @@ export const collectionsSlice = createSlice({
         collection.environments = filter(collection.environments, (e) => e.uid !== environment.uid);
       }
     },
+    collectionAddSharedScriptFileEvent: (state, action) => {
+      const { sharedScript, collectionUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+
+      if (collection) {
+        collection.sharedScripts = collection.sharedScripts || [];
+        const existingScript = collection.sharedScripts.find((s) => s.uid === sharedScript.uid);
+
+        if (existingScript) {
+          existingScript.name = sharedScript.name;
+          existingScript.pathname = sharedScript.pathname;
+          existingScript.content = sharedScript.content;
+        } else {
+          collection.sharedScripts.push(sharedScript);
+        }
+      }
+    },
+    collectionUnlinkSharedScriptFileEvent: (state, action) => {
+      const { sharedScript, collectionUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+
+      if (collection) {
+        collection.sharedScripts = collection.sharedScripts || [];
+        collection.sharedScripts = collection.sharedScripts.filter((s) => s.uid !== sharedScript.uid);
+      }
+    },
     saveEnvironment: (state, action) => {
       const { variables, environmentUid, collectionUid } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
@@ -594,8 +620,15 @@ export const collectionsSlice = createSlice({
         if (item) {
           item.requestState = 'received';
           item.response = action.payload.response;
-          item.cancelTokenUid = item.response.stream?.running ? item.cancelTokenUid : null;
+          item.cancelTokenUid = item.response?.stream?.running ? item.cancelTokenUid : null;
           item.requestStartTime = null;
+
+          if (item.response) {
+            item.testResults = item.response.testResults || [];
+            item.assertionResults = item.response.assertionResults || [];
+            item.preRequestTestResults = item.response.preRequestTestResults || [];
+            item.postResponseTestResults = item.response.postResponseTestResults || [];
+          }
 
           if (!collection.timeline) {
             collection.timeline = [];
@@ -2853,6 +2886,7 @@ export const collectionsSlice = createSlice({
               uid: uuid(),
               pathname: currentPath,
               name: directoryName,
+              filename: directoryName,
               collapsed: true,
               type: 'folder',
               isTransient: isTransientFile,
@@ -2883,6 +2917,7 @@ export const collectionsSlice = createSlice({
             currentItem.pathname = file.meta.pathname;
             currentItem.settings = file.data.settings;
             currentItem.examples = file.data.examples;
+            currentItem.flow = file.data.flow;
             currentItem.draft = null;
             currentItem.partial = file.partial;
             currentItem.loading = file.loading;
@@ -2902,6 +2937,7 @@ export const collectionsSlice = createSlice({
               request: file.data.request,
               settings: file.data.settings,
               examples: file.data.examples,
+              flow: file.data.flow,
               filename: file.meta.name,
               pathname: file.meta.pathname,
               draft: null,
@@ -3012,6 +3048,7 @@ export const collectionsSlice = createSlice({
             item.seq = file.data.seq;
             item.tags = file.data.tags;
             item.request = mergeRequestWithPreservedUids(item.request, file.data.request);
+            item.flow = file.data.flow;
             item.settings = file.data.settings;
             item.examples = file.data.examples;
             item.filename = file.meta.name;
@@ -3891,8 +3928,36 @@ export const collectionsSlice = createSlice({
     deleteResponseExampleFormUrlEncodedParam: exampleReducers.deleteResponseExampleFormUrlEncodedParam,
     addResponseExampleMultipartFormParam: exampleReducers.addResponseExampleMultipartFormParam,
     updateResponseExampleMultipartFormParam: exampleReducers.updateResponseExampleMultipartFormParam,
-    deleteResponseExampleMultipartFormParam: exampleReducers.deleteResponseExampleMultipartFormParam
+    deleteResponseExampleMultipartFormParam: exampleReducers.deleteResponseExampleMultipartFormParam,
     /* End Response Example Actions */
+
+    /* Flow Actions */
+    // Optimistically update seq values in Redux store so UI reorders immediately
+    // without waiting for the filesystem watcher round-trip.
+    updateItemsSeq: (state, action) => {
+      const { collectionUid, items } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (!collection) return;
+      items.forEach(({ uid, seq }) => {
+        const item = findItemInCollection(collection, uid);
+        if (item) {
+          item.seq = seq;
+          if (item.draft) item.draft.seq = seq;
+        }
+      });
+    },
+
+    updateItemFlow: (state, action) => {
+      const { itemUid, collectionUid, flow } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        const item = findItemInCollection(collection, itemUid);
+        if (item) {
+          item.flow = flow;
+        }
+      }
+    }
+    /* End Flow Actions */
   }
 });
 
@@ -3909,6 +3974,8 @@ export const {
   updateSettingsSelectedTab,
   updatedFolderSettingsSelectedTab,
   collectionUnlinkEnvFileEvent,
+  collectionAddSharedScriptFileEvent,
+  collectionUnlinkSharedScriptFileEvent,
   saveEnvironment,
   selectEnvironment,
   updateEnvironmentColor,
@@ -4088,7 +4155,9 @@ export const {
   addTransientDirectory,
   addSaveTransientRequestModal,
   removeSaveTransientRequestModal,
-  clearAllSaveTransientRequestModals
+  clearAllSaveTransientRequestModals,
+  updateItemFlow,
+  updateItemsSeq
 } = collectionsSlice.actions;
 
 export default collectionsSlice.reducer;

@@ -30,10 +30,25 @@ import { bruRequestParseAndRedactBodyData } from './formats/bru/utils/request-pa
 
 // request
 export const parseRequest = (content: string, options: ParseOptions = { format: DEFAULT_COLLECTION_FORMAT }): any => {
+  const trimmed = content ? content.trim() : '';
   if (options.format === 'bru') {
-    return parseBruRequest(content);
+    try {
+      return parseBruRequest(content);
+    } catch (e) {
+      if (trimmed.startsWith('info:') || trimmed.startsWith('meta:')) {
+        return parseYmlItem(content);
+      }
+      throw e;
+    }
   } else if (options.format === 'yml') {
-    return parseYmlItem(content);
+    try {
+      return parseYmlItem(content);
+    } catch (e) {
+      if (trimmed.startsWith('meta {') || trimmed.startsWith('meta\n{')) {
+        return parseBruRequest(content);
+      }
+      throw e;
+    }
   }
   throw new Error(`Unsupported format: ${options.format}`);
 };

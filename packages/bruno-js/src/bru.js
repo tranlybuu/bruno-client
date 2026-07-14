@@ -446,6 +446,18 @@ class Bru {
   isSafeMode() {
     return this.runtime === 'quickjs';
   }
+
+  require(scriptName) {
+    if (!scriptName || typeof scriptName !== 'string') {
+      throw new Error('scriptName must be a non-empty string');
+    }
+    if (this._customRequire) {
+      const path = require('path');
+      const scriptPath = path.join(this.collectionPath, '.bruno', 'scripts', `${scriptName}.js`);
+      return this._customRequire(scriptPath);
+    }
+    throw new Error('bru.require is not supported or not initialized in this environment');
+  }
 }
 
 module.exports = Bru;

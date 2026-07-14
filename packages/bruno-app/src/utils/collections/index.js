@@ -712,6 +712,7 @@ export const transformRequestToSaveToFilesystem = (item) => {
     settings: _item.settings,
     tags: _item.tags,
     examples: transformExamples(_item.examples || []),
+    flow: _item.flow,
     request: {
       method: _item.request.method,
       url: _item.request.url,
@@ -880,7 +881,7 @@ export const deleteItemInCollectionByPathname = (pathname, collection) => {
 };
 
 export const isItemARequest = (item) => {
-  return (item.hasOwnProperty('request') && ['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item.type) && !item.items) || item.type === 'file';
+  return (item.hasOwnProperty('request') && ['http-request', 'graphql-request', 'grpc-request', 'ws-request', 'flow-request'].includes(item.type) && !item.items) || item.type === 'file';
 };
 
 export const isItemAFolder = (item) => {
@@ -1488,7 +1489,9 @@ export const getReorderedItemsInSourceDirectory = ({ items }) => {
 
 export const calculateDraggedItemNewPathname = ({ draggedItem, targetItem, dropType, collectionPathname }) => {
   const { pathname: targetItemPathname } = targetItem;
-  const { filename: draggedItemFilename } = draggedItem;
+  // Use the actual filename from pathname to ensure extension is included (e.g. .bruflow files
+  // store their display name in `filename` without extension, which breaks path calculation).
+  const draggedItemFilename = path.basename(draggedItem.pathname);
   const targetItemDirname = path.dirname(targetItemPathname);
   const isTargetTheCollection = targetItemPathname === collectionPathname;
   const isTargetItemAFolder = isItemAFolder(targetItem);

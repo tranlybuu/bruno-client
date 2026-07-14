@@ -8,6 +8,7 @@ import ClientCertSettings from './ClientCertSettings';
 import Headers from './Headers';
 import Auth from './Auth';
 import Script from './Script';
+import SharedScripts from './SharedScripts';
 import Test from './Tests';
 import Presets from './Presets';
 import Protobuf from './Protobuf';
@@ -79,6 +80,9 @@ const CollectionSettings = ({ collection }) => {
       case 'script': {
         return <Script collection={collection} />;
       }
+      case 'sharedScripts': {
+        return <SharedScripts collection={collection} />;
+      }
       case 'tests': {
         return <Test collection={collection} />;
       }
@@ -124,6 +128,10 @@ const CollectionSettings = ({ collection }) => {
         <div className={getTabClassname('script')} role="tab" data-testid="collection-settings-tab-script" onClick={() => setTab('script')}>
           Script
           {hasScripts && <StatusDot />}
+        </div>
+        <div className={getTabClassname('sharedScripts')} role="tab" data-testid="collection-settings-tab-sharedScripts" onClick={() => setTab('sharedScripts')}>
+          Shared Scripts
+          {collection.sharedScripts && collection.sharedScripts.length > 0 && <sup className="ml-1 font-medium">{collection.sharedScripts.length}</sup>}
         </div>
         <div className={getTabClassname('tests')} role="tab" data-testid="collection-settings-tab-tests" onClick={() => setTab('tests')}>
           Tests

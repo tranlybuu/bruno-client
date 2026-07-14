@@ -2,12 +2,13 @@ const qs = require('qs');
 const chalk = require('chalk');
 const decomment = require('decomment');
 const fs = require('fs');
-const { forOwn, each, extend, get, compact } = require('lodash');
+const { forOwn, each, extend, get, compact, cloneDeep } = require('lodash');
 const prepareRequest = require('./prepare-request');
 const interpolateVars = require('./interpolate-vars');
 const { interpolateString, interpolateObject } = require('./interpolate-string');
 const { ScriptRuntime, TestRuntime, VarsRuntime, AssertRuntime, formatErrorWithContext, SCRIPT_TYPES } = require('@usebruno/js');
 const { stripExtension } = require('../utils/filesystem');
+const { findItemInCollection } = require('../utils/collection');
 const { getOptions } = require('../utils/bru');
 const { makeAxiosInstance } = require('../utils/axios-instance');
 const { addAwsV4Interceptor, resolveAwsV4Credentials } = require('./awsv4auth-helper');
@@ -97,6 +98,185 @@ const runSingleRequest = async function (
 ) {
   const { pathname: itemPathname } = item;
   const relativeItemPathname = path.relative(collectionPath, itemPathname);
+
+  if (item.type === 'flow-request') {
+    const flow = item.flow || { version: 2, steps: [] };
+    const steps = flow.steps || [];
+    const flowResults = [];
+    let isFlowError = false;
+    let flowErrorMessage = '';
+
+    const previousSteps = runtimeVariables.steps;
+    runtimeVariables.steps = previousSteps ? cloneDeep(previousSteps) : {};
+
+    for (let idx = 0; idx < steps.length; idx++) {
+      const step = steps[idx];
+      if (!step.enabled) continue;
+
+      const stepRequestPath = step.requestPathname;
+      const absoluteStepPath = path.resolve(collectionPath, stepRequestPath);
+      const stepItem = cloneDeep(findItemInCollection(collection, absoluteStepPath));
+      if (!stepItem) {
+        isFlowError = true;
+        flowErrorMessage = `Step "${step.name}": request file not found: ${stepRequestPath}`;
+        break;
+      }
+
+      const interpolationOptions = {
+        globalEnvVars,
+        envVars: envVariables,
+        runtimeVariables,
+        processEnvVars
+      };
+
+      const stepOverrides = step.override || {};
+      const resolvedOverrides = interpolateObject(cloneDeep(stepOverrides), interpolationOptions);
+
+      if (resolvedOverrides.headers) {
+        stepItem.request.headers = resolvedOverrides.headers;
+      }
+      if (resolvedOverrides.params) {
+        stepItem.request.params = resolvedOverrides.params;
+      }
+      if (resolvedOverrides.body) {
+        stepItem.request.body = resolvedOverrides.body;
+      }
+      if (step.script) {
+        stepItem.request.script = step.script;
+      }
+      if (step.tests) {
+        stepItem.request.tests = step.tests;
+      }
+      if (step.vars) {
+        stepItem.request.vars = step.vars;
+      }
+      if (step.assertions) {
+        stepItem.request.assertions = step.assertions;
+      }
+
+      // Fully interpolate the request object (headers, params, body, url) using current variables context
+      stepItem.request = interpolateObject(stepItem.request, interpolationOptions);
+
+      // Rebuild request URL with resolved query parameters (type === 'query'), aligning with UI FlowEditor behavior
+      const urlParts = (stepItem.request.url || '').split('?');
+      const urlQueryParams = [];
+      if (urlParts[1]) {
+        const searchParams = new URLSearchParams(urlParts[1]);
+        for (const [name, value] of searchParams.entries()) {
+          urlQueryParams.push({ name, value, type: 'query', enabled: true });
+        }
+      }
+
+      const queryParams = stepItem.request.params || [];
+      const allQueryParams = [...urlQueryParams];
+
+      for (const p of queryParams) {
+        if (p.type === 'query') {
+          const existing = allQueryParams.find((x) => x.name === p.name);
+          if (existing) {
+            existing.value = p.value;
+            existing.enabled = p.enabled;
+          } else {
+            allQueryParams.push(p);
+          }
+        }
+      }
+
+      const queryStr = allQueryParams
+        .filter((p) => p.enabled !== false && p.name)
+        .map((p) => `${p.name}=${p.value}`)
+        .join('&');
+
+      if (queryStr) {
+        stepItem.request.url = urlParts[0] + '?' + queryStr;
+      } else {
+        stepItem.request.url = urlParts[0];
+      }
+
+      try {
+        const res = await runSingleRequest(
+          stepItem,
+          collectionPath,
+          runtimeVariables,
+          envVariables,
+          processEnvVars,
+          brunoConfig,
+          collectionRoot,
+          runtime,
+          collection,
+          runSingleRequestByPathname,
+          globalEnvVars
+        );
+
+        flowResults.push({
+          name: step.name,
+          path: stepRequestPath,
+          status: res.status,
+          request: res.request,
+          response: res.response,
+          assertionResults: res.assertionResults || [],
+          testResults: res.testResults || [],
+          error: res.error
+        });
+
+        if (res.status === 'error' || res.status === 'fail' || res.response?.status === 'skipped') {
+          isFlowError = true;
+          flowErrorMessage = `Step "${step.name}" failed: ${res.error || res.response?.statusText || 'request failed'}`;
+          break;
+        }
+
+        const stepResponse = {
+          status: res.response.status,
+          headers: res.response.headers,
+          body: res.response.data,
+          data: res.response.data,
+          duration: res.response.duration,
+          size: res.response.size
+        };
+
+        runtimeVariables.steps[step.name] = stepResponse;
+        runtimeVariables.steps[`step${idx + 1}`] = stepResponse;
+      } catch (err) {
+        isFlowError = true;
+        flowErrorMessage = `Step "${step.name}" threw error: ${err.message}`;
+        flowResults.push({
+          name: step.name,
+          path: stepRequestPath,
+          status: 'error',
+          error: err.message
+        });
+        break;
+      }
+    }
+
+    if (previousSteps) {
+      runtimeVariables.steps = previousSteps;
+    } else {
+      delete runtimeVariables.steps;
+    }
+
+    return {
+      test: {
+        filename: relativeItemPathname
+      },
+      request: {
+        method: 'FLOW',
+        url: ''
+      },
+      response: {
+        status: isFlowError ? 'error' : 'success',
+        statusText: isFlowError ? flowErrorMessage : 'Flow executed successfully',
+        data: flowResults
+      },
+      error: isFlowError ? flowErrorMessage : null,
+      status: isFlowError ? 'error' : 'pass',
+      assertionResults: [],
+      testResults: [],
+      preRequestTestResults: [],
+      postResponseTestResults: [],
+      shouldStopRunnerExecution: isFlowError
+    };
+  }
 
   const logResults = (results, title, scriptType = null, request = null) => {
     if (results?.length) {
@@ -228,6 +408,20 @@ const runSingleRequest = async function (
           scriptingConfig,
           runSingleRequestByPathname,
           collectionName);
+
+        if (result?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, result.envVariables);
+        }
+        if (result?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, result.runtimeVariables);
+        }
+
         if (result?.nextRequestName !== undefined) {
           nextRequestName = result.nextRequestName;
         }
@@ -277,6 +471,20 @@ const runSingleRequest = async function (
         // Pre-request errors are treated as request errors (we return early with status: 'error'), not as failures. Unlike post-response and test script errors, we do not add a synthetic fail and continue.
         console.error(chalk.red(`[${relativeItemPathname}] Pre-request script error:`));
         console.log('\n' + formatErrorWithContext(error, relativeItemPathname, SCRIPT_TYPES.PRE_REQUEST, 5, request.script?.reqMetadata) + '\n');
+
+        const partialVars = error?.partialResults;
+        if (partialVars?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, partialVars.envVariables);
+        }
+        if (partialVars?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, partialVars.runtimeVariables);
+        }
 
         // Extract partial results from the error (tests that passed before the error)
         preRequestTestResults = error?.partialResults?.results || [];
@@ -771,6 +979,20 @@ const runSingleRequest = async function (
           runSingleRequestByPathname,
           collectionName
         );
+
+        if (result?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, result.envVariables);
+        }
+        if (result?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, result.runtimeVariables);
+        }
+
         if (result?.nextRequestName !== undefined) {
           nextRequestName = result.nextRequestName;
         }
@@ -790,6 +1012,20 @@ const runSingleRequest = async function (
       } catch (error) {
         console.error(chalk.red(`[${relativeItemPathname}] Post-response script error:`));
         console.log('\n' + formatErrorWithContext(error, relativeItemPathname, SCRIPT_TYPES.POST_RESPONSE, 5, request.script?.resMetadata) + '\n');
+
+        const partialVars = error?.partialResults;
+        if (partialVars?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, partialVars.envVariables);
+        }
+        if (partialVars?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, partialVars.runtimeVariables);
+        }
 
         const partialResults = error?.partialResults?.results || [];
         postResponseTestResults = [
@@ -847,8 +1083,21 @@ const runSingleRequest = async function (
           runSingleRequestByPathname,
           collectionName
         );
-        testResults = get(result, 'results', []);
 
+        if (result?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, result.envVariables);
+        }
+        if (result?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, result.runtimeVariables);
+        }
+
+        testResults = get(result, 'results', []);
         if (result?.nextRequestName !== undefined) {
           nextRequestName = result.nextRequestName;
         }
@@ -867,6 +1116,20 @@ const runSingleRequest = async function (
       } catch (error) {
         console.error(chalk.red(`[${relativeItemPathname}] Test script error:`));
         console.log('\n' + formatErrorWithContext(error, relativeItemPathname, SCRIPT_TYPES.TEST, 5, request.testsMetadata) + '\n');
+
+        const partialVars = error?.partialResults;
+        if (partialVars?.envVariables) {
+          for (const key of Object.keys(envVariables)) {
+            delete envVariables[key];
+          }
+          Object.assign(envVariables, partialVars.envVariables);
+        }
+        if (partialVars?.runtimeVariables) {
+          for (const key of Object.keys(runtimeVariables)) {
+            delete runtimeVariables[key];
+          }
+          Object.assign(runtimeVariables, partialVars.runtimeVariables);
+        }
 
         const partialResults = error?.partialResults?.results || [];
         testResults = [

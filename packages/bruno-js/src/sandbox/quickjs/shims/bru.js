@@ -582,6 +582,13 @@ const addBruShimToContext = (vm, bru) => {
         hasCookie: (url, name, cb) => callWithCallback(() => _jar._hasCookie(url, name), cb)
       };
     };
+
+    globalThis.bru.require = (scriptName) => {
+      if (!scriptName || typeof scriptName !== 'string') {
+        throw new Error('scriptName must be a non-empty string');
+      }
+      return globalThis.require('./.bruno/scripts/' + scriptName);
+    };
   `);
 };
 

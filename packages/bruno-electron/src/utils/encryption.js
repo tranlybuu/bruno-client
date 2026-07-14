@@ -103,7 +103,8 @@ function safeStorageDecrypt(str) {
 
 function encryptString(str, passkey = null) {
   if (typeof str !== 'string') {
-    throw new Error('Encrypt failed: invalid string');
+    console.warn('Encrypt skipped: value is not a string, type:', typeof str);
+    return '';
   }
   if (str.length === 0) {
     return '';

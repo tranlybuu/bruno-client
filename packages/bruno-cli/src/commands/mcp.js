@@ -615,6 +615,62 @@ const handler = async (argv) => {
                 },
                 required: ['url', 'method']
               }
+            },
+            {
+              name: 'get_flow_details',
+              description: 'Retrieves the parsed structure of a visual flow (.bruflow) file, containing its version and steps list. Use this to inspect the execution flow and step overrides before running it.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  collectionPath: {
+                    type: 'string',
+                    description: 'The absolute or relative path to the root directory of the Bruno collection.'
+                  },
+                  flowPath: {
+                    type: 'string',
+                    description: 'The relative path of the flow file within the collection (e.g. "auth/login_flow.bruflow"). Must end with ".bruflow".'
+                  }
+                },
+                required: ['collectionPath', 'flowPath']
+              }
+            },
+            {
+              name: 'run_flow',
+              description: 'Runs/executes a visual flow (.bruflow) in a specified Bruno collection. Executes all enabled steps in sequence, chaining response outputs, and returns full detailed execution summaries and step outputs. Automatically generates a sessionId.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  collectionPath: {
+                    type: 'string',
+                    description: 'The absolute or relative path to the root directory of the Bruno collection.'
+                  },
+                  flowPath: {
+                    type: 'string',
+                    description: 'The relative path of the flow file in the collection (e.g. "auth/login_flow.bruflow"). Must end with ".bruflow".'
+                  },
+                  env: {
+                    type: 'string',
+                    description: 'Optional name of the collection environment to load variables from (e.g. "Local", "Prod").'
+                  },
+                  envVars: {
+                    type: 'object',
+                    description: 'Optional key-value pairs of environment variable overrides to apply.'
+                  },
+                  globalEnv: {
+                    type: 'string',
+                    description: 'Optional global environment name to load workspace-level global environments.'
+                  }
+                },
+                required: ['collectionPath', 'flowPath']
+              }
+            },
+            {
+              name: 'get_bruno_templates',
+              description: 'Retrieves syntax configuration, structure patterns, and complete templates for writing Bruno request files (.bru) and visual flow files (.bruflow). This provides structural reference, scripting examples, and variable interpolation syntax to construct standard Bruno files correctly. Note for .bruflow: To override a step\'s values (body, params, headers) from the original API, you MUST set `isOverrideEnabled: true` in the step. If `isOverrideEnabled` is false or missing, the `override` block will be ignored and not shown in the UI.',
+              inputSchema: {
+                type: 'object',
+                properties: {}
+              }
             }
           ]
         }
@@ -643,6 +699,12 @@ const handler = async (argv) => {
           result = await handleGetSession(args);
         } else if (name === 'test_api') {
           result = await handleTestApi(args);
+        } else if (name === 'get_flow_details') {
+          result = await handleGetFlowDetails(args);
+        } else if (name === 'run_flow') {
+          result = await handleRunFlow(args);
+        } else if (name === 'get_bruno_templates') {
+          result = await handleGetBrunoTemplates(args);
         } else {
           sendJsonRpc({
             jsonrpc: '2.0',
@@ -746,26 +808,48 @@ const handler = async (argv) => {
           relativePath
         });
       } else {
-        if (file.name === collectionFile || file.name === folderFile || path.extname(filePath) !== ext) {
+        if (file.name === collectionFile || file.name === folderFile) {
           continue;
         }
-        try {
-          const content = fs.readFileSync(filePath, 'utf8');
-          const requestItem = parseRequest(content, { format });
-          items.push({
-            name: requestItem.name || file.name,
-            type: 'request',
-            relativePath,
-            method: (requestItem.type === 'http-request' || requestItem.type === 'graphql-request') ? requestItem.request?.method : 'GRAPHQL',
-            url: requestItem.request?.url || ''
-          });
-        } catch (err) {
-          items.push({
-            name: file.name,
-            type: 'request',
-            relativePath,
-            error: err.message
-          });
+        const fileExt = path.extname(filePath);
+        if (fileExt === ext) {
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const requestItem = parseRequest(content, { format });
+            items.push({
+              name: requestItem.name || file.name,
+              type: 'request',
+              relativePath,
+              method: (requestItem.type === 'http-request' || requestItem.type === 'graphql-request') ? requestItem.request?.method : 'GRAPHQL',
+              url: requestItem.request?.url || ''
+            });
+          } catch (err) {
+            items.push({
+              name: file.name,
+              type: 'request',
+              relativePath,
+              error: err.message
+            });
+          }
+        } else if (fileExt === '.bruflow') {
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const name = file.name.substring(0, file.name.length - 8); // removes '.bruflow'
+            items.push({
+              name,
+              type: 'flow',
+              relativePath,
+              method: 'FLOW',
+              url: ''
+            });
+          } catch (err) {
+            items.push({
+              name: file.name,
+              type: 'flow',
+              relativePath,
+              error: err.message
+            });
+          }
         }
       }
     }
@@ -1349,12 +1433,310 @@ ${logs}`;
     }
   }
 
+  async function handleGetFlowDetails(args) {
+    const { collectionPath, flowPath } = args;
+    if (!collectionPath || !flowPath) {
+      throw new Error('Arguments "collectionPath" and "flowPath" are required.');
+    }
+
+    const resolvedCollectionPath = path.resolve(process.cwd(), collectionPath);
+    const format = getCollectionFormat(resolvedCollectionPath);
+    if (!format) {
+      throw new Error(`The directory "${resolvedCollectionPath}" is not the root of a Bruno collection (bruno.json or opencollection.yml is missing).`);
+    }
+
+    const absoluteFlowPath = path.resolve(resolvedCollectionPath, flowPath);
+    if (!absoluteFlowPath.startsWith(resolvedCollectionPath)) {
+      throw new Error(`Flow path must be inside the collection directory.`);
+    }
+
+    if (!fs.existsSync(absoluteFlowPath)) {
+      throw new Error(`Flow file does not exist: ${flowPath}`);
+    }
+
+    const content = fs.readFileSync(absoluteFlowPath, 'utf8');
+    const flowData = JSON.parse(content);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(flowData, null, 2)
+        }
+      ]
+    };
+  }
+
+  async function handleRunFlow(args) {
+    const { collectionPath, flowPath, env, envVars, globalEnv } = args;
+    if (!collectionPath || !flowPath) {
+      throw new Error('Arguments "collectionPath" and "flowPath" are required.');
+    }
+
+    const resolvedCollectionPath = path.resolve(process.cwd(), collectionPath);
+    const format = getCollectionFormat(resolvedCollectionPath);
+    if (!format) {
+      throw new Error(`The directory "${resolvedCollectionPath}" is not the root of a Bruno collection (bruno.json or opencollection.yml is missing).`);
+    }
+    const collection = createCollectionJsonFromPathname(resolvedCollectionPath);
+    const absoluteFlowPath = path.resolve(resolvedCollectionPath, flowPath);
+
+    if (!fs.existsSync(absoluteFlowPath)) {
+      throw new Error(`Flow file does not exist: ${flowPath}`);
+    }
+
+    const content = fs.readFileSync(absoluteFlowPath, 'utf8');
+    const flowData = JSON.parse(content);
+
+    const flowItem = {
+      pathname: absoluteFlowPath,
+      type: 'flow-request',
+      name: path.basename(flowPath, '.bruflow'),
+      flow: flowData
+    };
+
+    const { envVars: resolvedEnvVars, globalEnvVars, processEnvVars } = await resolveEnvironment(
+      resolvedCollectionPath,
+      collection,
+      env,
+      envVars,
+      globalEnv
+    );
+
+    const runtimeVariables = {};
+    const brunoConfig = collection.brunoConfig;
+    const collectionRoot = collection.root;
+    const runtime = 'quickjs';
+
+    const runSingleRequestByPathname = async (relativeItemPathname) => {
+      const ext = FORMAT_CONFIG[collection.format].ext;
+      return new Promise(async (resolve, reject) => {
+        let itemPathname = path.join(resolvedCollectionPath, relativeItemPathname);
+        if (itemPathname && !itemPathname?.endsWith(ext)) {
+          itemPathname = `${itemPathname}${ext}`;
+        }
+        const requestItem = cloneDeep(findItemInCollection(collection, itemPathname));
+        if (requestItem) {
+          const res = await runSingleRequest(
+            requestItem,
+            resolvedCollectionPath,
+            runtimeVariables,
+            resolvedEnvVars,
+            processEnvVars,
+            brunoConfig,
+            collectionRoot,
+            runtime,
+            collection,
+            runSingleRequestByPathname,
+            globalEnvVars
+          );
+          resolve(res?.response);
+        }
+        reject(`bru.runRequest: invalid request path - ${itemPathname}`);
+      });
+    };
+
+    startIntercepting();
+
+    let result;
+    try {
+      result = await runSingleRequest(
+        flowItem,
+        resolvedCollectionPath,
+        runtimeVariables,
+        resolvedEnvVars,
+        processEnvVars,
+        brunoConfig,
+        collectionRoot,
+        runtime,
+        collection,
+        runSingleRequestByPathname,
+        globalEnvVars
+      );
+    } finally {
+      const logs = stopIntercepting();
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      const sessionData = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        collectionPath: resolvedCollectionPath,
+        type: 'flow',
+        flowPath,
+        env,
+        results: result?.response?.data || []
+      };
+      saveSession(sessionData);
+
+      const outputText = `=== Session ID: ${sessionId} ===\n` + formatOutput(result, logs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: outputText
+          }
+        ],
+        isError: result?.status === 'error' || result?.response?.status === 'skipped'
+      };
+    }
+  }
+
+  async function handleGetBrunoTemplates() {
+    const templates = {
+      bru_http_request: `meta {
+  name: Get Repo Info
+  type: http
+  seq: 1
+}
+
+get {
+  url: https://api.github.com/repos/usebruno/bruno
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  User-Agent: Bruno
+}
+
+vars:pre-request {
+  dummy_var: initial_val
+}
+
+vars:post-response {
+  repo_name: {{res.body.name}}
+}
+
+script:pre-request {
+  // JavaScript to run before request
+  bru.setVar("pre_time", Date.now());
+}
+
+script:post-response {
+  // JavaScript to run after response
+  console.log("Status is " + res.status);
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.eql(200);
+  });
+  test("Name is bruno", function() {
+    expect(res.getBody().name).to.eql("bruno");
+  });
+}
+
+docs {
+  This gets repository information from GitHub API.
+}`,
+      bru_graphql_request: `meta {
+  name: GraphQL Example
+  type: graphql
+  seq: 2
+}
+
+post {
+  url: https://countries.trevorblades.com/
+  body: graphql
+  auth: none
+}
+
+body:graphql {
+  query {
+    country(code: "US") {
+      name
+      capital
+      currency
+    }
+  }
+}
+
+body:graphql:vars {
+  {
+    "code": "US"
+  }
+}`,
+      bruflow: `{
+  "version": 2,
+  "steps": [
+    {
+      "id": "764bb729-1065-4f40-84c4-fdf6a7e0ebc5",
+      "name": "login",
+      "requestPathname": "auth/login.bru",
+      "method": "POST",
+      "url": "https://api.example.com/auth/login",
+      "enabled": true,
+      "isOverrideEnabled": false,
+      "override": {
+        "params": [],
+        "headers": [],
+        "body": {
+          "mode": "json",
+          "json": "{\\n  \\"username\\": \\"admin\\",\\n  \\"password\\": \\"secret123\\"\\n}"
+        }
+      }
+    },
+    {
+      "id": "e6a47738-f9b6-455b-80dc-b5297120df0f",
+      "name": "get_profile",
+      "requestPathname": "user/get-profile.bru",
+      "method": "GET",
+      "url": "https://api.example.com/user/profile",
+      "enabled": true,
+      "isOverrideEnabled": true,
+      "override": {
+        "params": [],
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{steps.login.body.token}}",
+            "enabled": true
+          }
+        ],
+        "body": {
+          "mode": "none"
+        }
+      }
+    }
+  ]
+}`
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(templates, null, 2)
+        }
+      ]
+    };
+  }
+
   function formatOutput(result, logs) {
     if (!result) {
       return `=== Execution Logs ===\n${logs}\n\nError: No result returned.`;
     }
 
     const { request, response, error, assertionResults = [], testResults = [] } = result;
+
+    if (request && request.method === 'FLOW') {
+      const flowResults = response?.data || [];
+      const stepsSummary = flowResults.map((r) => {
+        const stepStatusSymbol = r.status === 'pass' || r.status === 'success' ? '✓' : '✕';
+        const reqInfo = r.request ? `[${r.request.method} ${r.request.url}]` : '';
+        const resInfo = r.response ? `-> ${r.response.status} (${r.response.duration || 0}ms)` : '';
+        return `${stepStatusSymbol} ${r.name} ${reqInfo} ${resInfo}${r.error ? `\n   Error: ${r.error}` : ''}`;
+      }).join('\n');
+
+      return `=== Execution Logs ===
+${logs}
+=== Flow Execution Summary ===
+${stepsSummary || 'No steps executed'}
+
+${error ? `=== Error ===\n${error}\n` : ''}`;
+    }
 
     const reqStr = request ? `${request.method} ${request.url}` : '';
     const resStr = response && response.status !== 'skipped' && response.status !== 'error'

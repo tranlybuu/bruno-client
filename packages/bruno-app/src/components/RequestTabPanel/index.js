@@ -12,6 +12,7 @@ import { cancelRequest, sendRequest } from 'providers/ReduxStore/slices/collecti
 import { updateGqlDocsOpen } from 'providers/ReduxStore/slices/tabs';
 import RequestNotFound from './RequestNotFound';
 import PlainFileEditor from 'components/PlainFileEditor';
+import FlowEditor from 'components/Flows/FlowEditor';
 import QueryUrl from 'components/RequestPane/QueryUrl/index';
 import GrpcQueryUrl from 'components/RequestPane/GrpcQueryUrl/index';
 import NetworkError from 'components/ResponsePane/NetworkError';
@@ -429,6 +430,14 @@ const RequestTabPanel = () => {
 
   if (item.type === 'file') {
     return <PlainFileEditor item={item} collection={collection} />;
+  }
+
+  if (item.type === 'flow-request') {
+    return (
+      <ScopedPersistenceProvider scope={focusedTab.uid}>
+        <FlowEditor item={item} collection={collection} />
+      </ScopedPersistenceProvider>
+    );
   }
 
   if (item.partial) {

@@ -24,7 +24,8 @@ import {
   IconFile,
   IconEye,
   IconEyeOff,
-  IconSortAscendingLetters
+  IconSortAscendingLetters,
+  IconRoute
 } from '@tabler/icons';
 import OpenAPISyncIcon from 'components/Icons/OpenAPISync';
 import { toggleCollection, collapseFullCollection, toggleShowOnlyRequests } from 'providers/ReduxStore/slices/collections';
@@ -36,6 +37,7 @@ import toast from 'react-hot-toast';
 import NewRequest from 'components/Sidebar/NewRequest';
 import NewFolder from 'components/Sidebar/NewFolder';
 import NewFile from 'components/Sidebar/NewFile';
+import NewFlow from 'components/Sidebar/NewFlow';
 import CollectionItem from './CollectionItem';
 import RemoveCollection from './RemoveCollection';
 import { doesCollectionHaveItemsMatchingSearchText } from 'utils/collections/search';
@@ -70,6 +72,7 @@ const Collection = ({ collection, searchText }) => {
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [showNewFileModal, setShowNewFileModal] = useState(false);
+  const [showNewFlowModal, setShowNewFlowModal] = useState(false);
   const [showRenameCollectionModal, setShowRenameCollectionModal] = useState(false);
   const [showCloneCollectionModalOpen, setShowCloneCollectionModalOpen] = useState(false);
   const [showShareCollectionModal, setShowShareCollectionModal] = useState(false);
@@ -357,6 +360,15 @@ const Collection = ({ collection, searchText }) => {
       }
     },
     {
+      id: 'new-flow',
+      leftSection: IconRoute,
+      label: 'New Flow',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        setShowNewFlowModal(true);
+      }
+    },
+    {
       id: 'new-folder',
       leftSection: IconFolderPlus,
       label: 'New Folder',
@@ -489,6 +501,9 @@ const Collection = ({ collection, searchText }) => {
       {showNewRequestModal && <NewRequest collectionUid={collection.uid} onClose={() => setShowNewRequestModal(false)} />}
       {showNewFolderModal && <NewFolder collectionUid={collection.uid} onClose={() => setShowNewFolderModal(false)} />}
       {showNewFileModal && <NewFile collectionUid={collection.uid} onClose={() => setShowNewFileModal(false)} />}
+      {showNewFlowModal && (
+        <NewFlow collection={collection} onClose={() => setShowNewFlowModal(false)} />
+      )}
       {showRenameCollectionModal && (
         <RenameCollection collectionUid={collection.uid} onClose={() => setShowRenameCollectionModal(false)} />
       )}

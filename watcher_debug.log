@@ -1,0 +1,172 @@
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/01 - Sent Private Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/02 - Receive Private Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/03 - Send Group Message to Private Group.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/04 - Two User Send Message And Attachment.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/05 - Two Users Chat WS Full Flow.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/06 - Manage Companies and Users.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/07 - Trigger Message Batch Seal.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/08 - Trigger Message Batch Verify.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/09 - Verify Message Integrity.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/10 - Create Direct Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/11 - Create Group Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/12 - Send Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/13 - Check Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/14 - Check Message and Reply.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/15 - Create Empty Group Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/16 - Add Member to Conversation Group.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/17 - List Conversation IDs for a User.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/18 - Remove or leave conversation member.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/19 - Assert removed member cannot access conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/20 - Paginate message history.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/21 - Update group conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/22 - List company conversations oversight.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/23 - Oversight read conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/24 - Deny oversight send.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/25 - Deny update company.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/26 - Deny duplicate company.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/27 - Deny assign staff.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/28 - Deny create company user.bruflow
+watcher add: /Users/boo/Library/Application Support/Bruno/tmp/transient/bruno-scratch-Y8q4rj/metadata.json
+watcher add: /Users/boo/Library/Application Support/Bruno/tmp/transient/bruno-scratch-Y8q4rj/opencollection.yml
+watcher add: /Users/boo/Documents/dev/bruno/SLM/.DS_Store
+watcher add: /Users/boo/Documents/dev/bruno/SLM/README.md
+watcher add: /Users/boo/Documents/dev/bruno/SLM/SLM-documentation.html
+watcher add: /Users/boo/Documents/dev/bruno/SLM/bruno.json
+watcher add: /Users/boo/Documents/dev/bruno/SLM/collection.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/config.js
+watcher add: /Users/boo/Documents/dev/bruno/SLM/env.js
+watcher add: /Users/boo/Documents/dev/bruno/SLM/env_example.js
+watcher add: /Users/boo/Documents/dev/bruno/SLM/environments/local.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/01 - Login User 1.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/04 - WS User 1 Subscribe Inbox.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/06 - Login User 2.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/09 - WS User 2 Subscribe Inbox.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/get verify token.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/health.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/mock.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/status.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Web Socket/ws messages.js
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/01 - Sent Private Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/01 - Sent Private Message.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/02 - Receive Private Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/02 - Receive Private Message.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/03 - Send Group Message to Private Group.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/03 - Send Group Message to Private Group.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/04 - Two User Send Message And Attachment.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/04 - Two User Send Message And Attachment.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/05 - Two Users Chat WS Full Flow.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/05 - Two Users Chat WS Full Flow.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/06 - Manage Companies and Users.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/06 - Manage Companies and Users.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/07 - Trigger Message Batch Seal.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/07 - Trigger Message Batch Seal.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/08 - Trigger Message Batch Verify.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/08 - Trigger Message Batch Verify.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/09 - Verify Message Integrity.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/09 - Verify Message Integrity.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/10 - Create Direct Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/10 - Create Direct Conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/11 - Create Group Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/11 - Create Group Conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/12 - Send Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/12 - Send Message.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/13 - Check Message.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/13 - Check Message.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/14 - Check Message and Reply.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/14 - Check Message and Reply.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/15 - Create Empty Group Conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/15 - Create Empty Group Conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/16 - Add Member to Conversation Group.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/16 - Add Member to Conversation Group.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/17 - List Conversation IDs for a User.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/17 - List Conversation IDs for a User.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/18 - Remove or leave conversation member.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/18 - Remove or leave conversation member.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/19 - Assert removed member cannot access conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/19 - Assert removed member cannot access conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/20 - Paginate message history.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/20 - Paginate message history.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/21 - Update group conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/21 - Update group conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/22 - List company conversations oversight.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/22 - List company conversations oversight.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/23 - Oversight read conversation.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/23 - Oversight read conversation.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/24 - Deny oversight send.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/24 - Deny oversight send.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/25 - Deny update company.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/25 - Deny update company.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/26 - Deny duplicate company.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/26 - Deny duplicate company.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/27 - Deny assign staff.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/27 - Deny assign staff.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/28 - Deny create company user.bruflow
+addFlowFile called for /Users/boo/Documents/dev/bruno/SLM/Flow/28 - Deny create company user.bruflow
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/README.md
+watcher add: /Users/boo/Documents/dev/bruno/SLM/Flow/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/Create user.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/Get user.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/List users.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/Search users.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/Update user.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/users/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/sys/Get app configs.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/sys/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/message-batches/Trigger message batch seal.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/message-batches/Trigger message batch verify.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/message-batches/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/internal/Get websocket status.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/internal/Mock push notification.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/internal/Mock websocket event.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/internal/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/confirm 2fa code.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/confirm 2fa passkey.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/delete passkey.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/forgot password.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/get self info.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/issue websocket access token.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/list passkeys.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login (admin).bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login (company).bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login (employee 1).bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login (employee 2).bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login (employee 3).bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/login 2fa.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/logout device.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/logout.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/register device.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/request change password.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/reset password.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/setup 2fa.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/social login.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/iam (login)/update self info.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Add members to group.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Create conversation.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Get conversation.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/List conversation members.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/List conversations.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/List messages.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Mark messages as delivered.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Mark messages as read.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Remove or leave a conversation.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Send a message.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Update conversation.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/Verify message integrity.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/conversations/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Assign company accounts.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Create company.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Get company account.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Get company.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/List companies.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/List company accounts.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Update company account.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/Update company.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/companies/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/attachment/Get public URL.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/attachment/Upload.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/API/attachment/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/.bruno/folder.bru
+watcher add: /Users/boo/Documents/dev/bruno/SLM/.bruno/history.json

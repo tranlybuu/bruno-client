@@ -31,6 +31,8 @@ import brunoClipboard from 'utils/bruno-clipboard';
 
 import {
   collectionAddEnvFileEvent as _collectionAddEnvFileEvent,
+  collectionAddSharedScriptFileEvent as _collectionAddSharedScriptFileEvent,
+  collectionUnlinkSharedScriptFileEvent as _collectionUnlinkSharedScriptFileEvent,
   createCollection as _createCollection,
   removeCollection as _removeCollection,
   selectEnvironment as _selectEnvironment,
@@ -62,7 +64,8 @@ import {
   addTransientDirectory,
   addSaveTransientRequestModal,
   updatePathParam,
-  loadCollectionHistory
+  loadCollectionHistory,
+  updateItemsSeq
 } from './index';
 
 import { each } from 'lodash';
@@ -682,6 +685,7 @@ export const sendRequest = (item, collectionUid, options = {}) => (dispatch, get
               })
             );
             dispatch(saveCollectionHistory(collectionUid));
+            resolve();
             return;
           }
 
@@ -702,6 +706,7 @@ export const sendRequest = (item, collectionUid, options = {}) => (dispatch, get
             })
           );
           dispatch(saveCollectionHistory(collectionUid));
+          resolve();
         });
     }
   });
@@ -925,6 +930,13 @@ export const renameItem
           let newPath = '';
           if (item.type === 'folder') {
             newPath = path.join(dirname, trim(newFilename));
+          } else if (item.type === 'file') {
+            const ext = path.extname(item.pathname);
+            const filename = newFilename.endsWith(ext) ? newFilename : `${newFilename}${ext}`;
+            newPath = path.join(dirname, filename);
+          } else if (item.type === 'flow-request') {
+            const filename = newFilename.endsWith('.bruflow') ? newFilename : `${newFilename}.bruflow`;
+            newPath = path.join(dirname, filename);
           } else {
             const filename = resolveRequestFilename(newFilename, collection.format);
             newPath = path.join(dirname, filename);
@@ -1342,6 +1354,11 @@ export const handleCollectionItemDrop
         });
 
         if (reorderedItems?.length) {
+          // Optimistically update Redux store so UI reflects the new order immediately.
+          dispatch(updateItemsSeq({
+            collectionUid,
+            items: reorderedItems.map((i) => ({ uid: i.uid, seq: i.seq }))
+          }));
           await dispatch(updateItemsSequences({ itemsToResequence: reorderedItems, collectionUid }));
         }
       };
@@ -2964,6 +2981,52 @@ export const collectionAddEnvFileEvent = (payload) => (dispatch, getState) => {
   });
 };
 
+export const collectionAddSharedScriptFileEvent = (payload) => (dispatch, getState) => {
+  const { data: sharedScript, meta } = payload;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, meta.collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    dispatch(
+      _collectionAddSharedScriptFileEvent({
+        sharedScript: {
+          ...sharedScript,
+          pathname: meta?.pathname,
+          uid: meta?.uid
+        },
+        collectionUid: meta.collectionUid
+      })
+    );
+    resolve();
+  });
+};
+
+export const collectionUnlinkSharedScriptFileEvent = (payload) => (dispatch, getState) => {
+  const { meta } = payload;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, meta.collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    dispatch(
+      _collectionUnlinkSharedScriptFileEvent({
+        sharedScript: {
+          uid: meta.uid
+        },
+        collectionUid: meta.collectionUid
+      })
+    );
+    resolve();
+  });
+};
+
 export const importCollection = (collection, collectionLocation, options = {}) => (dispatch, getState) => {
   return new Promise(async (resolve, reject) => {
     const { ipcRenderer } = window;
@@ -3530,6 +3593,12 @@ export const sortFolderItemsAlphabetically = ({ collectionUid, folderUid }) => (
     toast.success('Items are already sorted');
     return Promise.resolve();
   }
+
+  // Optimistically update the Redux store so the sidebar re-renders immediately.
+  dispatch(updateItemsSeq({
+    collectionUid,
+    items: itemsToResequence.map((i) => ({ uid: i.uid, seq: i.seq }))
+  }));
 
   return dispatch(updateItemsSequences({ itemsToResequence, collectionUid }))
     .then(() => {

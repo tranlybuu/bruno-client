@@ -572,6 +572,36 @@ const wsRequestSchema = Yup.object({
   .noUnknown(true)
   .strict();
 
+const flowRequestSchema = Yup.object({
+  url: requestUrlSchema.nullable().optional(),
+  method: Yup.string().nullable().optional(),
+  headers: Yup.array().of(keyValueSchema).nullable().optional(),
+  params: Yup.array().of(requestParamsSchema).nullable().optional(),
+  auth: authSchema,
+  body: requestBodySchema.nullable().optional(),
+  script: Yup.object({
+    req: Yup.string().nullable(),
+    res: Yup.string().nullable()
+  })
+    .noUnknown(true)
+    .strict()
+    .nullable()
+    .optional(),
+  vars: Yup.object({
+    req: Yup.array().of(varsSchema).nullable(),
+    res: Yup.array().of(varsSchema).nullable()
+  })
+    .noUnknown(true)
+    .strict()
+    .nullable()
+    .optional(),
+  assertions: Yup.array().of(assertionSchema).nullable().optional(),
+  tests: Yup.string().nullable().optional(),
+  docs: Yup.string().nullable().optional()
+})
+  .noUnknown(true)
+  .strict();
+
 const wsSettingsSchema = Yup.object({
   settings: Yup.object({
     timeout: Yup.number()
@@ -620,7 +650,7 @@ const folderRootSchema = Yup.object({
 
 const itemSchema = Yup.object({
   uid: uidSchema,
-  type: Yup.string().oneOf(['http-request', 'graphql-request', 'folder', 'js', 'grpc-request', 'ws-request']).required('type is required'),
+  type: Yup.string().oneOf(['http-request', 'graphql-request', 'folder', 'js', 'grpc-request', 'ws-request', 'flow-request']).required('type is required'),
   seq: Yup.number().min(1),
   name: Yup.string().min(1, 'name must be at least 1 character').required('name is required'),
   tags: Yup.array().of(Yup.string().min(1, 'tag must not be empty')),
@@ -630,13 +660,18 @@ const itemSchema = Yup.object({
     otherwise: Yup.mixed().when('type', {
       is: (type) => type === 'ws-request',
       then: wsRequestSchema.required('request is required when item-type is ws-request'),
-      otherwise: requestSchema.when('type', {
-        is: (type) => ['http-request', 'graphql-request'].includes(type),
-        then: (schema) => schema.required('request is required when item-type is request')
+      otherwise: Yup.mixed().when('type', {
+        is: (type) => type === 'flow-request',
+        then: flowRequestSchema.nullable().notRequired(),
+        otherwise: requestSchema.when('type', {
+          is: (type) => ['http-request', 'graphql-request'].includes(type),
+          then: (schema) => schema.required('request is required when item-type is request')
+        })
       })
     })
   }),
-    settings: Yup.mixed()
+  flow: Yup.object().nullable().optional(),
+  settings: Yup.mixed()
     .when('type', {
       is: (type) => type === 'ws-request',
       then: wsSettingsSchema,
@@ -698,6 +733,7 @@ const collectionSchema = Yup.object({
 
 module.exports = {
   requestSchema,
+  flowRequestSchema,
   itemSchema,
   environmentSchema,
   environmentsSchema,

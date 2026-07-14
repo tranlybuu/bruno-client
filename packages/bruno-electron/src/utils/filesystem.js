@@ -189,13 +189,17 @@ const searchForFiles = (dir, extension) => {
 // Search for request files based on collection filetype by reading config
 const searchForRequestFiles = (dir, collectionPath = null) => {
   const format = getCollectionFormat(collectionPath || dir);
+  let ext = '';
   if (format === 'yml') {
-    return searchForFiles(dir, '.yml');
+    ext = '.yml';
   } else if (format === 'bru') {
-    return searchForFiles(dir, '.bru');
+    ext = '.bru';
   } else {
     throw new Error(`Invalid format: ${format}`);
   }
+  const requestFiles = searchForFiles(dir, ext);
+  const flowFiles = searchForFiles(dir, '.bruflow');
+  return requestFiles.concat(flowFiles);
 };
 
 const sanitizeName = (name) => {
@@ -241,6 +245,15 @@ const getCollectionFormat = (collectionPath) => {
 
   const brunoJsonPath = path.join(collectionPath, 'bruno.json');
   if (fs.existsSync(brunoJsonPath)) {
+    try {
+      const content = fs.readFileSync(brunoJsonPath, 'utf8');
+      const config = JSON.parse(content);
+      if (config && config.format) {
+        return config.format;
+      }
+    } catch (e) {
+      // ignore
+    }
     return 'bru';
   }
 

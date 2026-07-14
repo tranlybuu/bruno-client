@@ -88,4 +88,50 @@ describe('Item Schema Validation', () => {
       )
     ]);
   });
+
+  it('item schema must validate flow-request type with flow object and simplified request successfully', async () => {
+    const item = {
+      uid: uuid(),
+      name: 'User Flow',
+      type: 'flow-request',
+      request: {
+        method: 'FLOW',
+        url: ''
+      },
+      flow: {
+        nodes: [
+          { id: '1', type: 'requestNode', position: { x: 0, y: 0 }, data: { label: 'Step 1' } }
+        ],
+        edges: []
+      }
+    };
+
+    const isValid = await itemSchema.validate(item);
+    expect(isValid).toBeTruthy();
+  });
+
+  it('item schema must validate flow-request type with full request object successfully', async () => {
+    const item = {
+      uid: uuid(),
+      name: 'User Flow Full',
+      type: 'flow-request',
+      request: {
+        method: 'FLOW',
+        url: '',
+        headers: [],
+        params: [],
+        script: {
+          req: 'console.log("hello")',
+          res: null
+        }
+      },
+      flow: {
+        nodes: [],
+        edges: []
+      }
+    };
+
+    const isValid = await itemSchema.validate(item);
+    expect(isValid).toBeTruthy();
+  });
 });

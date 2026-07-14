@@ -99,7 +99,9 @@ const replace = (
     const patternRegex = /\{\{([^}]+)\}\}/g;
     matchFound = false;
     resultStr = resultStr.replace(patternRegex, (match, placeholder) => {
-      let replacement = get(obj, placeholder);
+      // Prefer direct key lookup (e.g. obj["user_1.email"]) before falling back to
+      // lodash get which treats dots as nested-path separators.
+      let replacement = obj[placeholder] !== undefined ? obj[placeholder] : get(obj, placeholder);
       if (typeof replacement === 'object' && replacement !== null) {
         replacement = JSON.stringify(replacement);
       }

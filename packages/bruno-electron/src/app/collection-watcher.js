@@ -46,6 +46,13 @@ const isEnvironmentsFolder = (pathname, collectionPath) => {
   return path.normalize(dirname) === path.normalize(envDirectory);
 };
 
+const isScriptsFolder = (pathname, collectionPath) => {
+  const dirname = path.dirname(pathname);
+  const scriptsDirectory = path.join(collectionPath, '.bruno', 'scripts');
+
+  return path.normalize(dirname) === path.normalize(scriptsDirectory);
+};
+
 const isFolderRootFile = (pathname, collectionPath) => {
   const basename = path.basename(pathname);
   const format = getCollectionFormat(collectionPath);
@@ -195,8 +202,119 @@ const unlinkEnvironmentFile = async (win, pathname, collectionUid) => {
   }
 };
 
+const addSharedScriptFile = async (win, pathname, collectionUid) => {
+  try {
+    const basename = path.basename(pathname);
+    const ext = path.extname(basename);
+    if (ext !== '.js') return;
+
+    const name = basename.substring(0, basename.length - ext.length);
+    const content = fs.readFileSync(pathname, 'utf8');
+
+    const file = {
+      meta: {
+        collectionUid,
+        pathname,
+        name,
+        uid: name
+      },
+      data: {
+        name,
+        content
+      }
+    };
+
+    win.webContents.send('main:collection-tree-updated', 'addSharedScriptFile', file);
+  } catch (err) {
+    console.error('Error processing shared script file: ', err);
+  }
+};
+
+const unlinkSharedScriptFile = (win, pathname, collectionUid) => {
+  try {
+    const basename = path.basename(pathname);
+    const ext = path.extname(basename);
+    if (ext !== '.js') return;
+
+    const name = basename.substring(0, basename.length - ext.length);
+    const file = {
+      meta: {
+        collectionUid,
+        pathname,
+        name,
+        uid: name
+      }
+    };
+
+    win.webContents.send('main:collection-tree-updated', 'unlinkSharedScriptFile', file);
+  } catch (err) {
+    console.error('Error deleting shared script file: ', err);
+  }
+};
+
+const addFlowFile = async (win, pathname, collectionUid, eventType = 'addFile') => {
+  try {
+    const basename = path.basename(pathname);
+    const content = fs.readFileSync(pathname, 'utf8');
+    const flowData = content ? JSON.parse(content) : { nodes: [], edges: [] };
+    const name = basename.substring(0, basename.length - 8);
+
+    const file = {
+      meta: {
+        collectionUid,
+        pathname,
+        name,
+        type: 'flow-request'
+      },
+      data: {
+        uid: getRequestUid(pathname),
+        name,
+        type: 'flow-request',
+        seq: flowData.seq !== undefined ? flowData.seq : 1,
+        request: {
+          method: 'FLOW',
+          url: ''
+        },
+        flow: flowData
+      }
+    };
+
+    win.webContents.send('main:collection-tree-updated', eventType, file);
+  } catch (err) {
+    console.error('Error processing flow file: ', err);
+  }
+};
+
+const unlinkFlowFile = (win, pathname, collectionUid) => {
+  try {
+    const basename = path.basename(pathname);
+    const name = basename.substring(0, basename.length - 8);
+    const file = {
+      meta: {
+        collectionUid,
+        pathname,
+        name,
+        uid: getRequestUid(pathname),
+        type: 'flow-request'
+      }
+    };
+
+    win.webContents.send('main:collection-tree-updated', 'unlink', file);
+  } catch (err) {
+    console.error('Error deleting flow file: ', err);
+  }
+};
+
 const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread, watcher) => {
   console.log(`watcher add: ${pathname}`);
+
+  if (isScriptsFolder(pathname, collectionPath)) {
+    return addSharedScriptFile(win, pathname, collectionUid);
+  }
+
+  if (pathname.endsWith('.bruflow')) {
+    return addFlowFile(win, pathname, collectionUid);
+  }
 
   if (isBrunoConfigFile(pathname, collectionPath)) {
     try {
@@ -440,6 +558,14 @@ const addDirectory = async (win, pathname, collectionUid, collectionPath) => {
 };
 
 const change = async (win, pathname, collectionUid, collectionPath) => {
+  if (isScriptsFolder(pathname, collectionPath)) {
+    return addSharedScriptFile(win, pathname, collectionUid);
+  }
+
+  if (pathname.endsWith('.bruflow')) {
+    return addFlowFile(win, pathname, collectionUid, 'change');
+  }
+
   if (isBrunoConfigFile(pathname, collectionPath)) {
     try {
       const content = fs.readFileSync(pathname, 'utf8');
@@ -604,6 +730,14 @@ const unlink = (win, pathname, collectionUid, collectionPath) => {
       return;
     }
     console.log(`watcher unlink: ${pathname}`);
+
+    if (isScriptsFolder(pathname, collectionPath)) {
+      return unlinkSharedScriptFile(win, pathname, collectionUid);
+    }
+
+    if (pathname.endsWith('.bruflow')) {
+      return unlinkFlowFile(win, pathname, collectionUid);
+    }
 
     if (isEnvironmentsFolder(pathname, collectionPath)) {
       return unlinkEnvironmentFile(win, pathname, collectionUid);

@@ -564,9 +564,16 @@ const parseYmlFileMeta = (data) => {
 
 // Format-aware meta parsing function
 const parseFileMeta = (data, format = DEFAULT_COLLECTION_FORMAT) => {
+  const trimmed = data ? data.trim() : '';
   if (format === 'yml') {
+    if (trimmed.startsWith('meta {') || trimmed.startsWith('meta\n{')) {
+      return parseBruFileMeta(data);
+    }
     return parseYmlFileMeta(data);
   } else {
+    if (trimmed.startsWith('info:') || trimmed.startsWith('meta:')) {
+      return parseYmlFileMeta(data);
+    }
     return parseBruFileMeta(data);
   }
 };

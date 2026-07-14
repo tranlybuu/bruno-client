@@ -928,6 +928,9 @@ const registerNetworkIpc = (mainWindow) => {
 
       let preRequestScriptResult = null;
       let preRequestError = null;
+      let postResponseScriptResult = null;
+      let assertionResults = [];
+      let testScriptResults = null;
       try {
         preRequestScriptResult = await runPreRequest(
           request,
@@ -1122,7 +1125,6 @@ const registerNetworkIpc = (mainWindow) => {
       cookiesStore.saveCookieJar();
 
       const runPostScripts = async () => {
-        let postResponseScriptResult = null;
         let postResponseError = null;
         try {
           postResponseScriptResult = await runPostResponse(request,
@@ -1176,7 +1178,7 @@ const registerNetworkIpc = (mainWindow) => {
         const assertions = get(request, 'assertions');
         if (assertions) {
           const assertRuntime = new AssertRuntime({ runtime: scriptingConfig?.runtime });
-          const results = assertRuntime.runAssertions(assertions,
+          assertionResults = assertRuntime.runAssertions(assertions,
             request,
             response,
             envVars,
@@ -1185,7 +1187,7 @@ const registerNetworkIpc = (mainWindow) => {
 
           !runInBackground && mainWindow.webContents.send('main:run-request-event', {
             type: 'assertion-results',
-            results: results,
+            results: assertionResults,
             itemUid: item.uid,
             requestUid,
             collectionUid
@@ -1196,11 +1198,10 @@ const registerNetworkIpc = (mainWindow) => {
         const collectionName = collection?.name;
         if (typeof testFile === 'string') {
           const testRuntime = new TestRuntime({ runtime: scriptingConfig?.runtime });
-          let testResults = null;
           let testError = null;
 
           try {
-            testResults = await testRuntime.runTests(decomment(testFile, { space: true }),
+            testScriptResults = await testRuntime.runTests(decomment(testFile, { space: true }),
               request,
               response,
               envVars,
@@ -1215,9 +1216,9 @@ const registerNetworkIpc = (mainWindow) => {
             testError = error;
 
             if (error.partialResults) {
-              testResults = error.partialResults;
+              testScriptResults = error.partialResults;
             } else {
-              testResults = {
+              testScriptResults = {
                 request,
                 envVariables: envVars,
                 runtimeVariables,
@@ -1228,40 +1229,40 @@ const registerNetworkIpc = (mainWindow) => {
             }
           }
 
-          emitScriptedRequestEvents('tests', testResults);
+          emitScriptedRequestEvents('tests', testScriptResults);
 
-          testResults = appendScriptErrorResult('test', testResults, testError);
+          testScriptResults = appendScriptErrorResult('test', testScriptResults, testError);
 
           !runInBackground && mainWindow.webContents.send('main:run-request-event', {
             type: 'test-results',
-            results: testResults.results,
+            results: testScriptResults.results,
             itemUid: item.uid,
             requestUid,
             collectionUid
           });
 
           mainWindow.webContents.send('main:script-environment-update', {
-            envVariables: testResults.envVariables,
-            runtimeVariables: testResults.runtimeVariables,
-            persistentEnvVariables: testResults.persistentEnvVariables,
-            persistentEnvVariablesWithEnv: testResults.persistentEnvVariablesWithEnv,
+            envVariables: testScriptResults.envVariables,
+            runtimeVariables: testScriptResults.runtimeVariables,
+            persistentEnvVariables: testScriptResults.persistentEnvVariables,
+            persistentEnvVariablesWithEnv: testScriptResults.persistentEnvVariablesWithEnv,
             requestUid,
             collectionUid
           });
 
           mainWindow.webContents.send('main:persistent-env-variables-update', {
-            persistentEnvVariables: testResults.persistentEnvVariables,
-            persistentEnvVariablesWithEnv: testResults.persistentEnvVariablesWithEnv,
+            persistentEnvVariables: testScriptResults.persistentEnvVariables,
+            persistentEnvVariablesWithEnv: testScriptResults.persistentEnvVariablesWithEnv,
             collectionUid
           });
 
           mainWindow.webContents.send('main:global-environment-variables-update', {
-            globalEnvironmentVariables: testResults.globalEnvironmentVariables
+            globalEnvironmentVariables: testScriptResults.globalEnvironmentVariables
           });
 
-          collection.globalEnvironmentVariables = testResults.globalEnvironmentVariables;
+          collection.globalEnvironmentVariables = testScriptResults.globalEnvironmentVariables;
 
-          resetOauth2Credentials({ oauth2CredentialsToReset: testResults.oauth2CredentialsToReset, request, collectionUid });
+          resetOauth2Credentials({ oauth2CredentialsToReset: testScriptResults.oauth2CredentialsToReset, request, collectionUid });
 
           !runInBackground && notifyScriptExecution({
             channel: 'main:run-request-event',
@@ -1296,7 +1297,11 @@ const registerNetworkIpc = (mainWindow) => {
         duration: responseTime ?? 0,
         url: response.request ? response.request.protocol + '//' + response.request.host + response.request.path : null,
         timeline: response.timeline,
-        requestSent
+        requestSent,
+        testResults: testScriptResults?.results || [],
+        assertionResults: assertionResults || [],
+        preRequestTestResults: preRequestScriptResult?.results || [],
+        postResponseTestResults: postResponseScriptResult?.results || []
       };
     } catch (error) {
       deleteCancelToken(cancelTokenUid);
@@ -1745,6 +1750,19 @@ const registerNetworkIpc = (mainWindow) => {
             preRequestScriptResult = appendScriptErrorResult('pre-request', preRequestScriptResult, preRequestError);
             emitRunnerScriptedRequestEvents('pre-request', preRequestScriptResult);
 
+            if (preRequestScriptResult?.envVariables) {
+              for (const key of Object.keys(envVars)) {
+                delete envVars[key];
+              }
+              Object.assign(envVars, preRequestScriptResult.envVariables);
+            }
+            if (preRequestScriptResult?.runtimeVariables) {
+              for (const key of Object.keys(runtimeVariables)) {
+                delete runtimeVariables[key];
+              }
+              Object.assign(runtimeVariables, preRequestScriptResult.runtimeVariables);
+            }
+
             if (preRequestScriptResult?.results) {
               mainWindow.webContents.send('main:run-folder-event', {
                 type: 'test-results-pre-request',
@@ -2003,6 +2021,19 @@ const registerNetworkIpc = (mainWindow) => {
             postResponseScriptResult = appendScriptErrorResult('post-response', postResponseScriptResult, postResponseError);
             emitRunnerScriptedRequestEvents('post-response', postResponseScriptResult);
 
+            if (postResponseScriptResult?.envVariables) {
+              for (const key of Object.keys(envVars)) {
+                delete envVars[key];
+              }
+              Object.assign(envVars, postResponseScriptResult.envVariables);
+            }
+            if (postResponseScriptResult?.runtimeVariables) {
+              for (const key of Object.keys(runtimeVariables)) {
+                delete runtimeVariables[key];
+              }
+              Object.assign(runtimeVariables, postResponseScriptResult.runtimeVariables);
+            }
+
             notifyScriptExecution({
               channel: 'main:run-folder-event',
               basePayload: eventData,
@@ -2094,6 +2125,19 @@ const registerNetworkIpc = (mainWindow) => {
 
               testResults = appendScriptErrorResult('test', testResults, testError);
               emitRunnerScriptedRequestEvents('tests', testResults);
+
+              if (testResults?.envVariables) {
+                for (const key of Object.keys(envVars)) {
+                  delete envVars[key];
+                }
+                Object.assign(envVars, testResults.envVariables);
+              }
+              if (testResults?.runtimeVariables) {
+                for (const key of Object.keys(runtimeVariables)) {
+                  delete runtimeVariables[key];
+                }
+                Object.assign(runtimeVariables, testResults.runtimeVariables);
+              }
 
               if (testResults?.nextRequestName !== undefined) {
                 nextRequestName = testResults.nextRequestName;

@@ -66,6 +66,10 @@ async function runScriptInNodeVm({
       additionalContextRootsAbsolute
     });
 
+    if (context && context.bru) {
+      context.bru._customRequire = scriptContext.require;
+    }
+
     const vmFilename = resolveVmFilename(scriptPath, collectionPath);
 
     // Execute the script in the isolated context

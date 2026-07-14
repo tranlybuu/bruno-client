@@ -40,4 +40,8 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(middleware)
 });
 
+if (typeof window !== 'undefined') {
+  window.store = store;
+}
+
 export default store;

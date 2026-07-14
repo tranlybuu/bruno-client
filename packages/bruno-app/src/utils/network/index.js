@@ -20,7 +20,11 @@ export const sendNetworkRequest = async (item, collection, environment, runtimeV
             duration: response.duration,
             timeline: response.timeline,
             stream: response.stream,
-            requestSent: response.requestSent
+            requestSent: response.requestSent,
+            testResults: response.testResults,
+            assertionResults: response.assertionResults,
+            preRequestTestResults: response.preRequestTestResults,
+            postResponseTestResults: response.postResponseTestResults
           });
         })
         .catch((err) => reject(err));

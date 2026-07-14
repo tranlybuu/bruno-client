@@ -69,9 +69,12 @@ describe('mcp command', () => {
         expect(resp.id).toBe(2);
         expect(Array.isArray(resp.result.tools)).toBe(true);
         const toolNames = resp.result.tools.map((t) => t.name);
-        expect(toolNames).toContain('list_requests');
+        expect(toolNames).toContain('list_collection_items');
         expect(toolNames).toContain('run_request');
         expect(toolNames).toContain('run_folder');
+        expect(toolNames).toContain('get_flow_details');
+        expect(toolNames).toContain('run_flow');
+        expect(toolNames).toContain('get_bruno_templates');
         done();
       } catch (err) {
         done(err);
@@ -83,6 +86,36 @@ describe('mcp command', () => {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/list'
+      }) + '\n');
+    });
+  });
+
+  it('should handle get_bruno_templates tool call', (done) => {
+    mockStdout.on('data', (chunk) => {
+      try {
+        const resp = JSON.parse(chunk.toString().trim());
+        expect(resp.jsonrpc).toBe('2.0');
+        expect(resp.id).toBe(3);
+        expect(resp.result.content).toBeDefined();
+        const templates = JSON.parse(resp.result.content[0].text);
+        expect(templates.bru_http_request).toBeDefined();
+        expect(templates.bru_graphql_request).toBeDefined();
+        expect(templates.bruflow).toBeDefined();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+
+    handler({}).then(() => {
+      mockStdin.write(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'get_bruno_templates',
+          arguments: {}
+        }
       }) + '\n');
     });
   });

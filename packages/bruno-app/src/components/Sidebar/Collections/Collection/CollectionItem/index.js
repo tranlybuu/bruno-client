@@ -20,7 +20,8 @@ import {
   IconInfoCircle,
   IconTerminal2,
   IconFile,
-  IconSortAscendingLetters
+  IconSortAscendingLetters,
+  IconRoute
 } from '@tabler/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { addTab, focusTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
@@ -32,6 +33,7 @@ import { copyRequest, setFocusedSidebarPath } from 'providers/ReduxStore/slices/
 import NewRequest from 'components/Sidebar/NewRequest';
 import NewFolder from 'components/Sidebar/NewFolder';
 import NewFile from 'components/Sidebar/NewFile';
+import NewFlow from 'components/Sidebar/NewFlow';
 import RenameCollectionItem from './RenameCollectionItem';
 import CloneCollectionItem from './CloneCollectionItem';
 import DeleteCollectionItem from './DeleteCollectionItem';
@@ -99,6 +101,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   const [newRequestModalOpen, setNewRequestModalOpen] = useState(false);
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
   const [newFileModalOpen, setNewFileModalOpen] = useState(false);
+  const [newFlowModalOpen, setNewFlowModalOpen] = useState(false);
   const [runCollectionModalOpen, setRunCollectionModalOpen] = useState(false);
   const [itemInfoModalOpen, setItemInfoModalOpen] = useState(false);
   const [examplesExpanded, setExamplesExpanded] = useState(false);
@@ -348,6 +351,12 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
           leftSection: IconFile,
           label: 'New File',
           onClick: () => setNewFileModalOpen(true)
+        },
+        {
+          id: 'new-flow',
+          leftSection: IconRoute,
+          label: 'New Flow',
+          onClick: () => setNewFlowModalOpen(true)
         },
         {
           id: 'new-folder',
@@ -647,6 +656,9 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
       )}
       {newFileModalOpen && (
         <NewFile item={item} collectionUid={collectionUid} onClose={() => setNewFileModalOpen(false)} />
+      )}
+      {newFlowModalOpen && (
+        <NewFlow item={item} collection={collection} onClose={() => setNewFlowModalOpen(false)} />
       )}
       {runCollectionModalOpen && (
         <RunCollectionItem collectionUid={collectionUid} item={item} onClose={() => setRunCollectionModalOpen(false)} />

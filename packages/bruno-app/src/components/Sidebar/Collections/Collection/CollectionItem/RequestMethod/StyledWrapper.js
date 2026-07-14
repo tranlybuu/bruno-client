@@ -43,6 +43,9 @@ const Wrapper = styled.div`
   .method-graphql {
     color: ${(props) => props.theme.request.gql};
   }
+  .method-flow {
+    color: #6366f1;
+  }
 `;
 
 export default Wrapper;
