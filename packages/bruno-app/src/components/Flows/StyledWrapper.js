@@ -501,6 +501,35 @@ const StyledWrapper = styled.div`
     }
     tr:last-child td { border-bottom: none; }
   }
+
+  .upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    color: ${(props) => props.theme.colors.text.muted || '#9ca3af'};
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+    flex: 0 0 auto;
+
+    &:hover {
+      color: ${(props) => props.theme.colors.text.default || '#111827'};
+    }
+  }
+
+  .value-cell {
+    width: 100%;
+    display: flex;
+    align-items: center;
+
+    .flex-1 {
+      min-width: 0;
+    }
+  }
+
   .section-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.5px; color: ${(props) => props.theme.colors.text.muted || '#9ca3af'};

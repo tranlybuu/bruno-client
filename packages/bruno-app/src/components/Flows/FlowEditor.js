@@ -19,13 +19,17 @@ import {
   IconChevronRight,
   IconCircleCheck,
   IconCircleX,
-  IconRotate2
+  IconRotate2,
+  IconUpload
 } from '@tabler/icons';
 import StyledWrapper from './StyledWrapper';
 import toast from 'react-hot-toast';
 import { flattenItems, findEnvironmentInCollection } from 'utils/collections';
 import { interpolate, interpolateObject } from '@usebruno/common';
-import path from 'utils/common/path';
+import path, { getRelativePathWithinBasePath, normalizePath } from 'utils/common/path';
+import MultipartFileChipsCell from 'components/MultipartFileChipsCell';
+import { browseFiles } from 'providers/ReduxStore/slices/collections/actions';
+import { getMultipartAutoContentType } from 'utils/common/multipartContentType';
 import Auth from 'components/RequestPane/Auth';
 import Vars from 'components/RequestPane/Vars';
 import Assertions from 'components/RequestPane/Assertions';
@@ -89,6 +93,9 @@ const getStatusClass = (status) => {
   if (status >= 300 && status < 400) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/30';
   return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800/30';
 };
+
+const fileBasename = (filePath) =>
+  filePath ? path.basename(normalizePath(String(filePath))) : '';
 
 // ─── Directory Node (Recursive) ───────────────────────────────────────────────
 
@@ -344,6 +351,7 @@ const ParamsEditor = ({ step, onChange, collection, item }) => {
 // ─── Body Editor ───────────────────────────────────────────────────────────────
 
 const BodyEditor = ({ step, onChange, collection, item, preferences }) => {
+  const dispatch = useDispatch();
   const { displayedTheme, storedTheme } = useTheme();
   const body = step.override?.body || { mode: 'none' };
 
@@ -367,6 +375,104 @@ const BodyEditor = ({ step, onChange, collection, item, preferences }) => {
     });
   };
 
+  const handleBrowseFiles = (row) => {
+    dispatch(browseFiles([], ['multiSelections']))
+      .then((filePaths) => {
+        if (!Array.isArray(filePaths) || filePaths.length === 0) return;
+
+        const processedPaths = filePaths.map((filePath) => {
+          return getRelativePathWithinBasePath(collection.pathname, filePath);
+        });
+
+        const currentParams = body.multipartForm || [];
+        const existingParam = currentParams.find((p) => p.uid === row.uid);
+        const existingValue = existingParam && existingParam.type === 'file' && Array.isArray(existingParam.value)
+          ? existingParam.value
+          : [];
+        const seen = new Set(existingValue);
+        const merged = [...existingValue];
+        const skipped = [];
+        for (const p of processedPaths) {
+          if (!seen.has(p)) {
+            seen.add(p);
+            merged.push(p);
+          } else {
+            skipped.push(p);
+          }
+        }
+
+        if (skipped.length === 1) {
+          toast(`"${fileBasename(skipped[0])}" is already added`);
+        } else if (skipped.length > 1) {
+          toast(`${skipped.length} files are already added — skipped`);
+        }
+
+        const autoContentType = getMultipartAutoContentType(merged);
+
+        let updatedParams;
+        if (existingParam) {
+          updatedParams = currentParams.map((p) => {
+            if (p.uid === row.uid) {
+              return { ...p, type: 'file', value: merged, contentType: autoContentType };
+            }
+            return p;
+          });
+        } else {
+          updatedParams = [
+            ...currentParams,
+            { uid: row.uid, name: row.name || '', enabled: true, type: 'file', value: merged, contentType: autoContentType }
+          ];
+        }
+        updateBodyValue('multipartForm', updatedParams);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+
+  const handleRemoveFile = (row, filePathToRemove) => {
+    const currentParams = body.multipartForm || [];
+    const target = currentParams.find((p) => p.uid === row.uid);
+    if (!target || target.type !== 'file') return;
+    const currentValue = Array.isArray(target.value)
+      ? target.value
+      : (target.value ? [target.value] : []);
+    const nextValue = currentValue.filter((p) => p !== filePathToRemove);
+
+    const updatedParams = currentParams.map((p) => {
+      if (p.uid !== row.uid) return p;
+      if (nextValue.length === 0) {
+        return { ...p, type: 'text', value: '', contentType: '' };
+      }
+      return { ...p, type: 'file', value: nextValue, contentType: getMultipartAutoContentType(nextValue) };
+    });
+    updateBodyValue('multipartForm', updatedParams);
+  };
+
+  const handleValueChange = (row, newValue, onChange) => {
+    const currentParams = body.multipartForm || [];
+    const existingParam = currentParams.find((p) => p.uid === row.uid);
+    if (existingParam) {
+      const updatedParams = currentParams.map((p) => {
+        if (p.uid === row.uid) {
+          return { ...p, type: 'text', value: newValue };
+        }
+        return p;
+      });
+      updateBodyValue('multipartForm', updatedParams);
+    } else {
+      onChange(newValue);
+    }
+  };
+
+  const getFileList = (filePaths) => {
+    if (!filePaths || (Array.isArray(filePaths) && filePaths.length === 0)) {
+      return [];
+    }
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    return paths.filter((v) => v != null && v !== '');
+  };
+
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-100 mt-2 w-full h-full" style={{ padding: '0 8px' }}>
       <div className="flex gap-2 items-center flex-shrink-0">
@@ -380,7 +486,10 @@ const BodyEditor = ({ step, onChange, collection, item, preferences }) => {
           <option value="none">No Body</option>
           <option value="json">JSON</option>
           <option value="text">Text</option>
+          <option value="xml">XML</option>
           <option value="formUrlEncoded">Form URL Encoded</option>
+          <option value="multipartForm">Multipart Form</option>
+          <option value="graphql">GraphQL</option>
         </select>
       </div>
 
@@ -413,6 +522,23 @@ const BodyEditor = ({ step, onChange, collection, item, preferences }) => {
             fontSize={preferences?.font?.codeFontSize}
             onEdit={(val) => updateBodyValue('text', val)}
             mode="text/plain"
+            showHintsFor={['req', 'res', 'bru', 'steps']}
+          />
+        </div>
+      )}
+
+      {body.mode === 'xml' && (
+        <div className="flex flex-col gap-1 w-full flex-1 min-h-[200px]">
+          <label className="lbl">XML Body Override</label>
+          <CodeEditor
+            collection={collection}
+            docKey={`body-xml-${step.id}`}
+            value={body.xml || ''}
+            theme={displayedTheme}
+            font={preferences?.font?.codeFont || 'default'}
+            fontSize={preferences?.font?.codeFontSize}
+            onEdit={(val) => updateBodyValue('xml', val)}
+            mode="application/xml"
             showHintsFor={['req', 'res', 'bru', 'steps']}
           />
         </div>
@@ -463,6 +589,129 @@ const BodyEditor = ({ step, onChange, collection, item, preferences }) => {
             defaultRow={{ name: '', value: '', enabled: true }}
             reorderable={false}
           />
+        </div>
+      )}
+
+      {body.mode === 'multipartForm' && (
+        <div className="w-full">
+          <EditableTable
+            tableId={`flow-multipart-${step.id}`}
+            columns={[
+              {
+                key: 'name',
+                name: 'Key',
+                isKeyField: true,
+                placeholder: 'Key',
+                width: '30%',
+                render: ({ value, onChange: onCellChange }) => (
+                  <SingleLineEditor
+                    value={value || ''}
+                    theme={storedTheme}
+                    onChange={(newValue) => onCellChange(newValue.replace(/[\r\n]/g, ''))}
+                    collection={collection}
+                    item={item}
+                    placeholder={!value ? 'Key' : ''}
+                    showHintsFor={['req', 'res', 'bru', 'steps']}
+                  />
+                )
+              },
+              {
+                key: 'value',
+                name: 'Value',
+                placeholder: 'Value',
+                width: '35%',
+                render: ({ row, value, onChange: onCellChange }) => {
+                  const files = row.type === 'file' ? getFileList(value) : [];
+                  if (files.length > 0) {
+                    return (
+                      <MultipartFileChipsCell
+                        files={files}
+                        onRemove={(filePath) => handleRemoveFile(row, filePath)}
+                        onAdd={() => handleBrowseFiles(row)}
+                      />
+                    );
+                  }
+
+                  return (
+                    <div className="value-cell">
+                      <div className="flex-1">
+                        <SingleLineEditor
+                          value={value || ''}
+                          theme={storedTheme}
+                          onChange={(newValue) => handleValueChange(row, newValue, onCellChange)}
+                          collection={collection}
+                          item={item}
+                          placeholder={!value ? 'Value' : ''}
+                          showHintsFor={['req', 'res', 'bru', 'steps']}
+                        />
+                      </div>
+                      <button
+                        data-testid="multipart-file-upload"
+                        className="upload-btn ml-1"
+                        onClick={() => handleBrowseFiles(row)}
+                        title="Select File"
+                      >
+                        <IconUpload size={16} />
+                      </button>
+                    </div>
+                  );
+                }
+              },
+              {
+                key: 'contentType',
+                name: 'Content-Type',
+                placeholder: 'Auto',
+                width: '20%',
+                render: ({ value, onChange: onCellChange }) => (
+                  <SingleLineEditor
+                    value={value || ''}
+                    theme={storedTheme}
+                    placeholder={!value ? 'Auto' : ''}
+                    onChange={onCellChange}
+                    collection={collection}
+                    showHintsFor={['req', 'res', 'bru', 'steps']}
+                  />
+                )
+              }
+            ]}
+            rows={body.multipartForm || []}
+            onChange={(rows) => updateBodyValue('multipartForm', rows)}
+            defaultRow={{ name: '', value: '', contentType: '', type: 'text', enabled: true }}
+            reorderable={false}
+          />
+        </div>
+      )}
+
+      {body.mode === 'graphql' && (
+        <div className="flex flex-col gap-3 w-full flex-1 min-h-[300px]">
+          <div className="flex flex-col gap-1 w-full flex-1 min-h-[150px]">
+            <label className="lbl">GraphQL Query Override</label>
+            <CodeEditor
+              collection={collection}
+              docKey={`body-graphql-query-${step.id}`}
+              value={body.graphql?.query || ''}
+              theme={displayedTheme}
+              font={preferences?.font?.codeFont || 'default'}
+              fontSize={preferences?.font?.codeFontSize}
+              onEdit={(val) => updateBodyValue('graphql', { ...(body.graphql || {}), query: val })}
+              mode="graphql"
+              showHintsFor={['req', 'res', 'bru', 'steps']}
+            />
+          </div>
+          <div className="flex flex-col gap-1 w-full h-[150px]">
+            <label className="lbl">GraphQL Variables Override (JSON)</label>
+            <CodeEditor
+              collection={collection}
+              docKey={`body-graphql-variables-${step.id}`}
+              value={body.graphql?.variables || ''}
+              theme={displayedTheme}
+              font={preferences?.font?.codeFont || 'default'}
+              fontSize={preferences?.font?.codeFontSize}
+              onEdit={(val) => updateBodyValue('graphql', { ...(body.graphql || {}), variables: val })}
+              mode="application/ld+json"
+              showHintsFor={['req', 'res', 'bru', 'steps']}
+            />
+          </div>
         </div>
       )}
 
