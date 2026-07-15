@@ -65,7 +65,8 @@ import {
   addSaveTransientRequestModal,
   updatePathParam,
   loadCollectionHistory,
-  updateItemsSeq
+  updateItemsSeq,
+  scriptEnvironmentUpdateEvent
 } from './index';
 
 import { each } from 'lodash';
@@ -651,7 +652,30 @@ export const sendRequest = (item, collectionUid, options = {}) => (dispatch, get
     } else {
       sendNetworkRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
         .then((response) => {
-          const { requestSent, ...responseData } = response;
+          const { requestSent, envVariables, runtimeVariables, persistentEnvVariables, persistentEnvVariablesWithEnv, ...responseData } = response;
+
+          if (envVariables || runtimeVariables) {
+            dispatch(
+              scriptEnvironmentUpdateEvent({
+                collectionUid,
+                envVariables,
+                runtimeVariables,
+                persistentEnvVariables
+              })
+            );
+          }
+
+          if ((persistentEnvVariables && Object.keys(persistentEnvVariables).length > 0)
+            || (persistentEnvVariablesWithEnv && Object.keys(persistentEnvVariablesWithEnv).length > 0)) {
+            dispatch(
+              mergeAndPersistEnvironment({
+                persistentEnvVariables,
+                persistentEnvVariablesWithEnv,
+                collectionUid
+              })
+            );
+          }
+
           // Ensure any timestamps in the response are converted to numbers
           const serializedResponse = {
             ...responseData,

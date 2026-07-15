@@ -763,6 +763,8 @@ const registerNetworkIpc = (mainWindow) => {
     const cancelTokenUid = uuid();
     // Nested bru.runRequest() invocations have no item.requestUid; mint one.
     const requestUid = item.requestUid || uuid();
+    let latestPersistentEnvVariables = {};
+    let latestPersistentEnvVariablesWithEnv = {};
 
     const runRequestByItemPathname = async (relativeItemPathname, callerBru) => {
       return new Promise(async (resolve, reject) => {
@@ -953,6 +955,11 @@ const registerNetworkIpc = (mainWindow) => {
       }
 
       emitScriptedRequestEvents('pre-request', preRequestScriptResult);
+
+      if (preRequestScriptResult) {
+        latestPersistentEnvVariables = { ...latestPersistentEnvVariables, ...preRequestScriptResult.persistentEnvVariables };
+        latestPersistentEnvVariablesWithEnv = { ...latestPersistentEnvVariablesWithEnv, ...preRequestScriptResult.persistentEnvVariablesWithEnv };
+      }
 
       preRequestScriptResult = appendScriptErrorResult('pre-request', preRequestScriptResult, preRequestError);
 
@@ -1152,6 +1159,11 @@ const registerNetworkIpc = (mainWindow) => {
 
         emitScriptedRequestEvents('post-response', postResponseScriptResult);
 
+        if (postResponseScriptResult) {
+          latestPersistentEnvVariables = { ...latestPersistentEnvVariables, ...postResponseScriptResult.persistentEnvVariables };
+          latestPersistentEnvVariablesWithEnv = { ...latestPersistentEnvVariablesWithEnv, ...postResponseScriptResult.persistentEnvVariablesWithEnv };
+        }
+
         postResponseScriptResult = appendScriptErrorResult('post-response', postResponseScriptResult, postResponseError);
 
         if (postResponseScriptResult?.results) {
@@ -1231,6 +1243,11 @@ const registerNetworkIpc = (mainWindow) => {
 
           emitScriptedRequestEvents('tests', testScriptResults);
 
+          if (testScriptResults) {
+            latestPersistentEnvVariables = { ...latestPersistentEnvVariables, ...testScriptResults.persistentEnvVariables };
+            latestPersistentEnvVariablesWithEnv = { ...latestPersistentEnvVariablesWithEnv, ...testScriptResults.persistentEnvVariablesWithEnv };
+          }
+
           testScriptResults = appendScriptErrorResult('test', testScriptResults, testError);
 
           !runInBackground && mainWindow.webContents.send('main:run-request-event', {
@@ -1301,7 +1318,11 @@ const registerNetworkIpc = (mainWindow) => {
         testResults: testScriptResults?.results || [],
         assertionResults: assertionResults || [],
         preRequestTestResults: preRequestScriptResult?.results || [],
-        postResponseTestResults: postResponseScriptResult?.results || []
+        postResponseTestResults: postResponseScriptResult?.results || [],
+        envVariables: envVars,
+        runtimeVariables: runtimeVariables,
+        persistentEnvVariables: latestPersistentEnvVariables,
+        persistentEnvVariablesWithEnv: latestPersistentEnvVariablesWithEnv
       };
     } catch (error) {
       deleteCancelToken(cancelTokenUid);
@@ -1312,7 +1333,11 @@ const registerNetworkIpc = (mainWindow) => {
         status: error?.status,
         error: error?.message || ERROR_OCCURRED_WHILE_EXECUTING_REQUEST,
         timeline: error?.timeline,
-        requestSent
+        requestSent,
+        envVariables: envVars,
+        runtimeVariables: runtimeVariables,
+        persistentEnvVariables: latestPersistentEnvVariables,
+        persistentEnvVariablesWithEnv: latestPersistentEnvVariablesWithEnv
       };
     }
   };

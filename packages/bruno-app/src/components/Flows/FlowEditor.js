@@ -707,6 +707,8 @@ const FlowEditor = ({ item, collection }) => {
       });
   }, [allItems, collection.pathname]);
 
+  const lastSeenFlowRef = useRef(item.flow);
+
   // Load steps from store
   useEffect(() => {
     const flow = item.flow;
@@ -718,7 +720,24 @@ const FlowEditor = ({ item, collection }) => {
     } else {
       setSteps([]);
     }
+    lastSeenFlowRef.current = flow;
   }, [item.uid]);
+
+  // Synchronize steps when item.flow changes in the Redux store (e.g. edited by agent on disk)
+  useEffect(() => {
+    if (item.flow !== lastSeenFlowRef.current) {
+      lastSeenFlowRef.current = item.flow;
+      const flow = item.flow;
+      if (flow && Array.isArray(flow.steps)) {
+        setSteps(flow.steps);
+        if (flow.steps.length > 0 && !selectedStepId) {
+          setSelectedStepId(flow.steps[0].id);
+        }
+      } else {
+        setSteps([]);
+      }
+    }
+  }, [item.flow]);
 
   // ── Save action ──
   const doSave = useCallback(async (stepsToSave) => {

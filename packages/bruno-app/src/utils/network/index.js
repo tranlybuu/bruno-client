@@ -24,7 +24,11 @@ export const sendNetworkRequest = async (item, collection, environment, runtimeV
             testResults: response.testResults,
             assertionResults: response.assertionResults,
             preRequestTestResults: response.preRequestTestResults,
-            postResponseTestResults: response.postResponseTestResults
+            postResponseTestResults: response.postResponseTestResults,
+            envVariables: response.envVariables,
+            runtimeVariables: response.runtimeVariables,
+            persistentEnvVariables: response.persistentEnvVariables,
+            persistentEnvVariablesWithEnv: response.persistentEnvVariablesWithEnv
           });
         })
         .catch((err) => reject(err));
