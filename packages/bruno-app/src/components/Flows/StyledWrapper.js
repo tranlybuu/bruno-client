@@ -77,6 +77,8 @@ const StyledWrapper = styled.div`
     flex: 1;
     display: flex;
     overflow: hidden;
+    min-height: 0;
+    min-width: 0;
   }
 
   /* ── List panel ── */
@@ -85,6 +87,8 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     overflow: hidden;
     flex: 1;
+    min-height: 0;
+    min-width: 0;
     transition: flex 0.2s ease;
     position: relative;
     &.with-panel { flex: 0 0 380px; border-right: 1px solid ${(props) => props.theme.colors.border || '#e5e7eb'}; }
@@ -117,10 +121,10 @@ const StyledWrapper = styled.div`
   }
   .list-header {
     display: grid;
-    grid-template-columns: 40px 32px 36px 70px 1fr 28px 28px 40px;
+    grid-template-columns: 40px 32px 36px 65px 1fr 40px;
     align-items: center;
     gap: 0;
-    padding: 6px 16px 6px 16px;
+    padding: 6px 16px;
     border-bottom: 1px solid ${(props) => props.theme.colors.border || '#e5e7eb'};
     border-left: 3px solid transparent;
     background: ${(props) => props.theme.colors.bg.default || '#f9fafb'};
@@ -138,10 +142,12 @@ const StyledWrapper = styled.div`
   .list-body {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
+    padding-bottom: 40px;
   }
   .step-row {
     display: grid;
-    grid-template-columns: 40px 32px 36px 70px 1fr 28px 28px 40px;
+    grid-template-columns: 40px 32px 36px 65px 1fr 40px;
     align-items: center;
     gap: 0;
     padding: 0 16px;
@@ -151,6 +157,7 @@ const StyledWrapper = styled.div`
     cursor: pointer;
     transition: background 0.1s, border-color 0.1s;
     position: relative;
+    overflow: hidden;
     user-select: none;
     &:hover { background: ${(props) => props.theme.colors.bg.hover || '#f8fafc'}; }
     &.selected {
@@ -188,11 +195,15 @@ const StyledWrapper = styled.div`
   .method-badge {
     font-size: 10px;
     font-weight: 700;
-    padding: 2px 7px;
+    min-width: 52px;
+    text-align: center;
+    display: inline-block;
+    padding: 2px 4px;
     border-radius: 4px;
     letter-spacing: 0.2px;
     white-space: nowrap;
     color: #fff;
+    flex-shrink: 0;
     &.GET    { background: #2563eb; }
     &.POST   { background: #16a34a; }
     &.PUT    { background: #d97706; }
@@ -240,23 +251,45 @@ const StyledWrapper = styled.div`
     }
   }
 
-  .row-delete-col {
+  .row-hover-actions {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: ${(props) => props.theme.colors.text.muted || '#9ca3af'};
-    opacity: 0;
-    transition: opacity 0.1s, color 0.1s;
-    &:hover { color: #ef4444; }
+    gap: 4px;
+    padding: 0 8px;
+    background: ${(props) => props.theme.colors.bg.panel || '#ffffff'};
+    border-left: 1px solid ${(props) => props.theme.colors.border || '#e5e7eb'};
+    box-shadow: -6px 0 12px rgba(0, 0, 0, 0.08);
+    transform: translateX(100%);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 10;
   }
-  .row-play-col {
+  .step-row:hover .row-hover-actions {
+    transform: translateX(0);
+  }
+  .action-icon-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: ${(props) => props.theme.colors.text.muted || '#6b7280'};
     cursor: pointer;
-    color: ${(props) => props.theme.colors.text.muted || '#9ca3af'};
-    opacity: 0;
+    transition: all 0.12s;
+    &:hover {
+      background: ${(props) => props.theme.colors.bg.hover || '#f3f4f6'};
+      color: ${(props) => props.theme.colors.text.default || '#111827'};
+    }
+    &.btn-play:hover { color: #10b981; background: #ecfdf5; }
+    &.btn-add:hover { color: #6366f1; background: #eef2ff; }
+    &.btn-delete:hover { color: #ef4444; background: #fef2f2; }
+  }
     transition: opacity 0.1s, color 0.1s;
     &:hover { color: #10b981; }
   }
@@ -309,6 +342,7 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    min-height: 0;
   }
   .config-header {
     padding: 14px 20px;
@@ -386,7 +420,8 @@ const StyledWrapper = styled.div`
   .config-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    min-height: 0;
+    padding: 16px 20px 40px 20px;
   }
   .config-close-btn {
     position: absolute;
@@ -649,6 +684,8 @@ const StyledWrapper = styled.div`
     flex: 1;
     height: 100%;
     overflow: hidden;
+    min-height: 0;
+    min-width: 0;
   }
   .runner-toolbar {
     display: flex;
@@ -747,6 +784,7 @@ const StyledWrapper = styled.div`
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
   }
   .runner-left-header {
     display: flex;
@@ -760,7 +798,8 @@ const StyledWrapper = styled.div`
   .runner-left-body {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 0;
+    min-height: 0;
+    padding: 8px 0 40px 0;
   }
   .runner-step-wrapper {
     display: flex;
@@ -913,6 +952,8 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     background: ${(props) => props.theme.colors.bg.panel || '#ffffff'};
     overflow: hidden;
+    min-height: 0;
+    min-width: 0;
   }
 
   /* ── Runner Detail View ── */
@@ -921,6 +962,7 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     flex: 1;
     overflow: hidden;
+    min-height: 0;
   }
   .trace-header {
     display: flex;
@@ -985,6 +1027,7 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     flex: 1;
     overflow: hidden;
+    min-height: 0;
   }
   .trace-detail-header {
     padding: 16px;
@@ -1046,7 +1089,8 @@ const StyledWrapper = styled.div`
   .trace-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    min-height: 0;
+    padding: 16px 16px 40px 16px;
   }
   .response-pre {
     padding: 12px;
@@ -1058,7 +1102,6 @@ const StyledWrapper = styled.div`
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
-    max-height: 100%;
     color: ${(props) => props.theme.colors.text.default || '#374151'};
   }
   .headers-table {

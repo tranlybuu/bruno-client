@@ -32,19 +32,25 @@ const outdentString = (str, spaces = 2) => {
 };
 
 const getValueString = (value) => {
-  // Handle null, undefined, and empty strings
-  if (!value) {
+  // Handle null, undefined
+  if (value == null) {
     return '';
   }
 
-  const hasNewLines = value.includes('\n') || value.includes('\r');
+  // Coerce to string to handle numbers, booleans, etc.
+  const str = String(value);
+  if (str === '') {
+    return '';
+  }
+
+  const hasNewLines = str.includes('\n') || str.includes('\r');
 
   if (!hasNewLines) {
-    return value;
+    return str;
   }
 
   // Wrap multiline values in triple quotes with 2-space indentation
-  return `'''\n${indentString(value)}\n'''`;
+  return `'''\n${indentString(str)}\n'''`;
 };
 
 const getKeyString = (key) => {

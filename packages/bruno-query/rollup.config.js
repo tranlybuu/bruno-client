@@ -28,7 +28,7 @@ module.exports = [
         extensions: ['.css']
       }),
       commonjs(),
-      typescript({ tsconfig: "./tsconfig.json" }),
+      typescript({ tsconfig: "./tsconfig.json", typescript: require('typescript'), compilerOptions: { skipLibCheck: true } }),
       terser()
     ]
   },

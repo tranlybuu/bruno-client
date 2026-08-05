@@ -157,15 +157,14 @@ export const getKeyBindingsForActionAllOS = (action, userKeyBindings) => {
 
   const combos = [];
 
-  // Detect current OS and use appropriate bindings only
-  const isMac = navigator.platform.toLowerCase().includes('mac');
-
-  if (isMac && actionBindings.mac) {
+  // Include both Mac and Windows combos so user can use Ctrl or Cmd on any platform
+  if (actionBindings.mac) {
     const combo = toMousetrapCombo(actionBindings.mac);
-    if (combo) combos.push(combo);
-  } else if (!isMac && actionBindings.windows) {
+    if (combo && !combos.includes(combo)) combos.push(combo);
+  }
+  if (actionBindings.windows) {
     const combo = toMousetrapCombo(actionBindings.windows);
-    if (combo) combos.push(combo);
+    if (combo && !combos.includes(combo)) combos.push(combo);
   }
 
   // console.log('[keyMappings] getKeyBindingsForActionAllOS:', action, '->', combos);

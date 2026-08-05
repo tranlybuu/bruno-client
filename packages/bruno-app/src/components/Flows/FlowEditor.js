@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateItemFlow } from 'providers/ReduxStore/slices/collections';
+import { makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
+import { isMacOS } from 'utils/common/platform';
 import {
   IconPlus,
   IconDeviceFloppy,
@@ -887,7 +889,8 @@ const FlowEditor = ({ item, collection }) => {
   const [selectedStepId, setSelectedStepId] = useState(null);
   const [activeTab, setActiveTab] = useState('headers');
   const [showApiPicker, setShowApiPicker] = useState(false);
-  const [pickerMode, setPickerMode] = useState(null); // 'add' | 'edit'
+  const [pickerMode, setPickerMode] = useState(null); // 'add' | 'edit' | 'insert'
+  const [insertTargetIndex, setInsertTargetIndex] = useState(null);
   const [running, setRunning] = useState(false);
   const [stepStates, setStepStates] = useState({});
   const [stepResponses, setStepResponses] = useState({});
@@ -1001,6 +1004,8 @@ const FlowEditor = ({ item, collection }) => {
         content: JSON.stringify(flow, null, 2)
       });
 
+      dispatch(makeTabPermanent({ uid: item.uid }));
+
       dispatch(updateItemFlow({
         itemUid: item.uid,
         collectionUid: collection.uid,
@@ -1028,7 +1033,7 @@ const FlowEditor = ({ item, collection }) => {
   }, [doSave, steps]);
 
   // ── Step management ──
-  const addStep = (req) => {
+  const addStep = (req, targetIndex = null) => {
     const isFlow = req.type === 'flow-request';
     const newStep = {
       id: uuid(),
@@ -1045,10 +1050,17 @@ const FlowEditor = ({ item, collection }) => {
         body: req.request?.body ? JSON.parse(JSON.stringify(req.request.body)) : { mode: 'none' }
       }
     };
-    const updated = [...steps, newStep];
+    let updated;
+    if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex < steps.length) {
+      updated = [...steps];
+      updated.splice(targetIndex + 1, 0, newStep);
+    } else {
+      updated = [...steps, newStep];
+    }
     setSteps(updated);
     setSelectedStepId(newStep.id);
     setActiveTab('headers');
+    doSave(updated);
   };
 
   const deleteStep = (stepId) => {
@@ -1338,6 +1350,8 @@ const FlowEditor = ({ item, collection }) => {
 
   const handleRun = async () => {
     if (running || steps.length === 0) return;
+    dispatch(makeTabPermanent({ uid: item.uid }));
+    await doSave(steps);
     setRunning(true);
     stopRequestedRef.current = false;
     setShowRunner(true);
@@ -1649,6 +1663,8 @@ const FlowEditor = ({ item, collection }) => {
 
   const handleRunSingleStep = async (stepToRun) => {
     if (running) return;
+    dispatch(makeTabPermanent({ uid: item.uid }));
+    await doSave(steps);
     setRunning(true);
     setStepStates((prev) => ({ ...prev, [stepToRun.id]: 'running' }));
 
@@ -1929,7 +1945,7 @@ const FlowEditor = ({ item, collection }) => {
           <button className="toolbar-btn btn-ghost" onClick={handleSave}>
             <IconDeviceFloppy size={13} />
             Save
-            <kbd>⌘S</kbd>
+            <kbd>{isMacOS() ? '⌘S' : 'Ctrl+S'}</kbd>
           </button>
           {showRunner && (
             <button className="toolbar-btn btn-ghost" onClick={() => setShowRunner(false)}>
@@ -1974,8 +1990,6 @@ const FlowEditor = ({ item, collection }) => {
               <span style={{ textAlign: 'center' }} />
               <span>Method</span>
               <span>Name</span>
-              <span />
-              <span />
               <span />
             </div>
 
@@ -2061,27 +2075,40 @@ const FlowEditor = ({ item, collection }) => {
                       )}
                     </div>
 
-                    {/* Play Button */}
-                    <div
-                      className="row-play-col"
-                      title="Run this step individually"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRunSingleStep(step);
-                      }}
-                    >
-                      <IconPlayerPlay size={14} />
-                    </div>
-
-                    {/* Delete Button */}
-                    <div
-                      className="row-delete-col"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteStep(step.id);
-                      }}
-                    >
-                      <IconTrash size={14} />
+                    {/* Sliding Hover Action Overlay */}
+                    <div className="row-hover-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="action-icon-btn btn-play"
+                        title="Run this step"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRunSingleStep(step);
+                        }}
+                      >
+                        <IconPlayerPlay size={14} />
+                      </button>
+                      <button
+                        className="action-icon-btn btn-add"
+                        title="Insert step below"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInsertTargetIndex(idx);
+                          setPickerMode('insert');
+                          setShowApiPicker(true);
+                        }}
+                      >
+                        <IconPlus size={14} />
+                      </button>
+                      <button
+                        className="action-icon-btn btn-delete"
+                        title="Delete step"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteStep(step.id);
+                        }}
+                      >
+                        <IconTrash size={14} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -2098,6 +2125,9 @@ const FlowEditor = ({ item, collection }) => {
                 <IconPlus size={14} />
                 Add step
               </div>
+
+              {/* Bottom spacer to prevent cut-off when scrolling */}
+              <div style={{ height: 60, flexShrink: 0 }} />
             </div>
 
             {/* Drag handle for resizing list panel */}
@@ -2112,7 +2142,7 @@ const FlowEditor = ({ item, collection }) => {
         )}
 
         {showRunner ? (
-          <div className="runner-container animate-in fade-in duration-150" style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div className="runner-container animate-in fade-in duration-150" style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
             {/* Left Pane: Steps Tree */}
             <div className="runner-left-panel">
               <div className="runner-left-header">
@@ -2164,138 +2194,143 @@ const FlowEditor = ({ item, collection }) => {
                     return <div className="no-data">No steps match the filter</div>;
                   }
 
-                  return filteredTrace.map((item) => {
-                    const isTraceSelected = selectedTraceId === item.id;
-                    const failedPreRequest = (item.preRequestTestResults || []).filter((t) => t.status !== 'pass');
-                    const failedPostResponse = (item.postResponseTestResults || []).filter((t) => t.status !== 'pass');
-                    const failedTestScripts = (item.testResults || []).filter((t) => t.status !== 'pass');
-                    const failedAssertions = (item.assertionResults || []).filter((t) => t.status !== 'pass');
+                  return (
+                    <>
+                      {filteredTrace.map((item) => {
+                        const isTraceSelected = selectedTraceId === item.id;
+                        const failedPreRequest = (item.preRequestTestResults || []).filter((t) => t.status !== 'pass');
+                        const failedPostResponse = (item.postResponseTestResults || []).filter((t) => t.status !== 'pass');
+                        const failedTestScripts = (item.testResults || []).filter((t) => t.status !== 'pass');
+                        const failedAssertions = (item.assertionResults || []).filter((t) => t.status !== 'pass');
 
-                    const hasFailedTests
-                      = failedPreRequest.length > 0
-                        || failedPostResponse.length > 0
-                        || failedTestScripts.length > 0
-                        || failedAssertions.length > 0;
+                        const hasFailedTests
+                          = failedPreRequest.length > 0
+                            || failedPostResponse.length > 0
+                            || failedTestScripts.length > 0
+                            || failedAssertions.length > 0;
 
-                    if (item.isFlowGroup) {
-                      return (
-                        <div
-                          key={item.id}
-                          className={`runner-step-row flow-group-row ${isTraceSelected ? 'selected' : ''} ${item.status}`}
-                          style={{ paddingLeft: `${item.depth * 20 + 16}px`, position: 'relative' }}
-                          onClick={() => setSelectedTraceId(item.id)}
-                        >
-                          {Array.from({ length: item.depth }).map((_, dIdx) => (
-                            <span
-                              key={dIdx}
-                              className={`tree-connector ${dIdx === item.depth - 1 ? 'last' : ''}`}
-                              style={{ left: `${dIdx * 20 + 16}px` }}
-                            />
-                          ))}
+                        if (item.isFlowGroup) {
+                          return (
+                            <div
+                              key={item.id}
+                              className={`runner-step-row flow-group-row ${isTraceSelected ? 'selected' : ''} ${item.status}`}
+                              style={{ paddingLeft: `${item.depth * 20 + 16}px`, position: 'relative' }}
+                              onClick={() => setSelectedTraceId(item.id)}
+                            >
+                              {Array.from({ length: item.depth }).map((_, dIdx) => (
+                                <span
+                                  key={dIdx}
+                                  className={`tree-connector ${dIdx === item.depth - 1 ? 'last' : ''}`}
+                                  style={{ left: `${dIdx * 20 + 16}px` }}
+                                />
+                              ))}
 
-                          {/* Status Icon */}
-                          <div className="status-icon">
-                            {item.status === 'running' && <IconLoader2 size={15} className="animate-spin text-blue-500" />}
-                            {item.status === 'success' && <IconCircleCheck size={15} className="text-green-500" />}
-                            {item.status === 'fail' && <IconCircleX size={15} className="text-red-500" />}
-                            {item.status === 'skipped' && <span className="skipped-dot" />}
-                            {item.status === 'pending' && <span className="pending-dot" />}
+                              {/* Status Icon */}
+                              <div className="status-icon">
+                                {item.status === 'running' && <IconLoader2 size={15} className="animate-spin text-blue-500" />}
+                                {item.status === 'success' && <IconCircleCheck size={15} className="text-green-500" />}
+                                {item.status === 'fail' && <IconCircleX size={15} className="text-red-500" />}
+                                {item.status === 'skipped' && <span className="skipped-dot" />}
+                                {item.status === 'pending' && <span className="pending-dot" />}
+                              </div>
+
+                              {/* Index Number */}
+                              <span className="runner-step-num">
+                                {stepNumbering[item.id]}.
+                              </span>
+
+                              {/* Method Badge */}
+                              <span className="method-badge FLOW" style={{ backgroundColor: METHOD_COLORS.FLOW || '#6366f1' }}>
+                                FLOW
+                              </span>
+
+                              {/* Name */}
+                              <span className="step-name truncate flex-1 font-semibold" style={{ color: '#6366f1' }}>
+                                {item.name}
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={item.id} className="runner-step-wrapper">
+                            <div
+                              className={`runner-step-row ${isTraceSelected ? 'selected' : ''} ${item.status}`}
+                              style={{ paddingLeft: `${item.depth * 20 + 16}px`, position: 'relative' }}
+                              onClick={() => setSelectedTraceId(item.id)}
+                            >
+                              {Array.from({ length: item.depth }).map((_, dIdx) => (
+                                <span
+                                  key={dIdx}
+                                  className={`tree-connector ${dIdx === item.depth - 1 ? 'last' : ''}`}
+                                  style={{ left: `${dIdx * 20 + 16}px` }}
+                                />
+                              ))}
+
+                              {/* Status Icon */}
+                              <div className="status-icon">
+                                {item.status === 'running' && <IconLoader2 size={15} className="animate-spin text-blue-500" />}
+                                {item.status === 'success' && <IconCircleCheck size={15} className="text-green-500" />}
+                                {item.status === 'fail' && <IconCircleX size={15} className="text-red-500" />}
+                                {item.status === 'skipped' && <span className="skipped-dot" />}
+                                {item.status === 'pending' && <span className="pending-dot" />}
+                              </div>
+
+                              {/* Index Number */}
+                              <span className="runner-step-num">
+                                {stepNumbering[item.id]}.
+                              </span>
+
+                              {/* Method Badge */}
+                              <span className={`method-badge ${item.step.method}`} style={{ backgroundColor: METHOD_COLORS[item.step.method] || '#6b7280' }}>
+                                {item.step.method}
+                              </span>
+
+                              {/* Name */}
+                              <span className="step-name truncate flex-1">{item.name}</span>
+
+                              {/* Status Code Badge */}
+                              {item.response && (
+                                <span className={`status-code ${item.status === 'success' ? 'success' : 'fail'}`}>
+                                  {item.response.status}
+                                </span>
+                              )}
+                            </div>
+                            {/* Test results nested under step */}
+                            {hasFailedTests && (
+                              <div className="runner-step-tests" style={{ paddingLeft: `${(item.depth * 20) + 36}px` }}>
+                                {failedPreRequest.map((t, tIdx) => (
+                                  <div key={`pre-${tIdx}`} className={`test-result-row ${t.status}`}>
+                                    <span className="test-status-icon">✗</span>
+                                    <span className="test-name truncate flex-1">[Pre-Request] {t.description}</span>
+                                  </div>
+                                ))}
+                                {failedPostResponse.map((t, tIdx) => (
+                                  <div key={`post-${tIdx}`} className={`test-result-row ${t.status}`}>
+                                    <span className="test-status-icon">✗</span>
+                                    <span className="test-name truncate flex-1">[Post-Response] {t.description}</span>
+                                  </div>
+                                ))}
+                                {failedTestScripts.map((t, tIdx) => (
+                                  <div key={`test-${tIdx}`} className={`test-result-row ${t.status}`}>
+                                    <span className="test-status-icon">✗</span>
+                                    <span className="test-name truncate flex-1">{t.description}</span>
+                                  </div>
+                                ))}
+                                {failedAssertions.map((t, tIdx) => (
+                                  <div key={`assert-${tIdx}`} className={`test-result-row ${t.status}`}>
+                                    <span className="test-status-icon">✗</span>
+                                    <span className="test-name truncate flex-1">[Assertion] {t.lhsExpr}: {t.rhsExpr}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-
-                          {/* Index Number */}
-                          <span className="runner-step-num">
-                            {stepNumbering[item.id]}.
-                          </span>
-
-                          {/* Method Badge */}
-                          <span className="method-badge FLOW" style={{ backgroundColor: METHOD_COLORS.FLOW || '#6366f1' }}>
-                            FLOW
-                          </span>
-
-                          {/* Name */}
-                          <span className="step-name truncate flex-1 font-semibold" style={{ color: '#6366f1' }}>
-                            {item.name}
-                          </span>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={item.id} className="runner-step-wrapper">
-                        <div
-                          className={`runner-step-row ${isTraceSelected ? 'selected' : ''} ${item.status}`}
-                          style={{ paddingLeft: `${item.depth * 20 + 16}px`, position: 'relative' }}
-                          onClick={() => setSelectedTraceId(item.id)}
-                        >
-                          {Array.from({ length: item.depth }).map((_, dIdx) => (
-                            <span
-                              key={dIdx}
-                              className={`tree-connector ${dIdx === item.depth - 1 ? 'last' : ''}`}
-                              style={{ left: `${dIdx * 20 + 16}px` }}
-                            />
-                          ))}
-
-                          {/* Status Icon */}
-                          <div className="status-icon">
-                            {item.status === 'running' && <IconLoader2 size={15} className="animate-spin text-blue-500" />}
-                            {item.status === 'success' && <IconCircleCheck size={15} className="text-green-500" />}
-                            {item.status === 'fail' && <IconCircleX size={15} className="text-red-500" />}
-                            {item.status === 'skipped' && <span className="skipped-dot" />}
-                            {item.status === 'pending' && <span className="pending-dot" />}
-                          </div>
-
-                          {/* Index Number */}
-                          <span className="runner-step-num">
-                            {stepNumbering[item.id]}.
-                          </span>
-
-                          {/* Method Badge */}
-                          <span className={`method-badge ${item.step.method}`} style={{ backgroundColor: METHOD_COLORS[item.step.method] || '#6b7280' }}>
-                            {item.step.method}
-                          </span>
-
-                          {/* Name */}
-                          <span className="step-name truncate flex-1">{item.name}</span>
-
-                          {/* Status Code Badge */}
-                          {item.response && (
-                            <span className={`status-code ${item.status === 'success' ? 'success' : 'fail'}`}>
-                              {item.response.status}
-                            </span>
-                          )}
-                        </div>
-                        {/* Test results nested under step */}
-                        {hasFailedTests && (
-                          <div className="runner-step-tests" style={{ paddingLeft: `${(item.depth * 20) + 36}px` }}>
-                            {failedPreRequest.map((t, tIdx) => (
-                              <div key={`pre-${tIdx}`} className={`test-result-row ${t.status}`}>
-                                <span className="test-status-icon">✗</span>
-                                <span className="test-name truncate flex-1">[Pre-Request] {t.description}</span>
-                              </div>
-                            ))}
-                            {failedPostResponse.map((t, tIdx) => (
-                              <div key={`post-${tIdx}`} className={`test-result-row ${t.status}`}>
-                                <span className="test-status-icon">✗</span>
-                                <span className="test-name truncate flex-1">[Post-Response] {t.description}</span>
-                              </div>
-                            ))}
-                            {failedTestScripts.map((t, tIdx) => (
-                              <div key={`test-${tIdx}`} className={`test-result-row ${t.status}`}>
-                                <span className="test-status-icon">✗</span>
-                                <span className="test-name truncate flex-1">{t.description}</span>
-                              </div>
-                            ))}
-                            {failedAssertions.map((t, tIdx) => (
-                              <div key={`assert-${tIdx}`} className={`test-result-row ${t.status}`}>
-                                <span className="test-status-icon">✗</span>
-                                <span className="test-name truncate flex-1">[Assertion] {t.lhsExpr}: {t.rhsExpr}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
+                        );
+                      })}
+                      <div style={{ height: 60, flexShrink: 0 }} />
+                    </>
+                  );
                 })()}
               </div>
             </div>
@@ -2459,6 +2494,7 @@ const FlowEditor = ({ item, collection }) => {
                           )}
                         </div>
                       )}
+                      <div style={{ height: 60, flexShrink: 0 }} />
                     </div>
                   </div>
                 );
@@ -2664,6 +2700,7 @@ const FlowEditor = ({ item, collection }) => {
 
                           {activeTab === 'info' && <InfoTab reqItem={selectedReqItem} />}
                           {activeTab === 'response' && <ResponseTab response={stepResponses[selectedStep.id]} />}
+                          <div style={{ height: 60, flexShrink: 0 }} />
                         </div>
                       </>
                     )}
@@ -2686,13 +2723,19 @@ const FlowEditor = ({ item, collection }) => {
           onSelect={(req) => {
             if (pickerMode === 'edit' && selectedStepId) {
               changeStepApi(selectedStepId, req);
+            } else if (pickerMode === 'insert' && insertTargetIndex !== null) {
+              addStep(req, insertTargetIndex);
             } else {
               addStep(req);
             }
+            setShowApiPicker(false);
+            setPickerMode(null);
+            setInsertTargetIndex(null);
           }}
           onClose={() => {
             setShowApiPicker(false);
             setPickerMode(null);
+            setInsertTargetIndex(null);
           }}
         />
       )}

@@ -8,8 +8,8 @@ import SaveRequestsModal from 'providers/App/ConfirmAppClose/SaveRequestsModal';
 import filter from 'lodash/filter';
 import each from 'lodash/each';
 import { findCollectionByUid, findItemInCollection, flattenItems, isItemARequest, hasRequestChanges, findEnvironmentInCollection } from 'utils/collections';
-import { addTab, focusTab, reorderTabs } from 'providers/ReduxStore/slices/tabs';
-import { saveMultipleRequests, saveMultipleCollections, saveMultipleFolders, saveEnvironment, reopenClosedTab } from 'providers/ReduxStore/slices/collections/actions';
+import { addTab, focusTab, reorderTabs, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
+import { saveMultipleRequests, saveMultipleCollections, saveMultipleFolders, saveEnvironment, reopenClosedTab, saveRequest, saveCollectionRoot, saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions';
 import { toggleSidebarCollapse, savePreferences } from 'providers/ReduxStore/slices/app';
 import { openDevtoolsAndSwitchToTerminal } from 'utils/terminal';
 import { getKeyBindingsForActionAllOS } from './keyMappings';
@@ -274,6 +274,38 @@ export const HotkeysProvider = (props) => {
 
     return () => {
       unbindAction('saveAllTabs');
+    };
+  }, [activeTabUid, tabs, collections, dispatch, userKeyBindings, keybindingsEnabled]);
+
+  // Save active tab (Cmd+S / Ctrl+S)
+  useEffect(() => {
+    bindAction('save', (e) => {
+      const activeTab = find(tabs, (t) => t.uid === activeTabUid);
+      if (!activeTab) return false;
+
+      // Automatically convert active tab to permanent tab on Save
+      dispatch(makeTabPermanent({ uid: activeTab.uid }));
+
+      if (!activeTab.collectionUid) return false;
+      const collection = findCollectionByUid(collections, activeTab.collectionUid);
+      if (!collection) return false;
+
+      if (activeTab.type === 'collection-settings') {
+        dispatch(saveCollectionRoot(collection.uid));
+      } else if (activeTab.type === 'folder-settings') {
+        dispatch(saveFolderRoot(collection.uid, activeTab.uid));
+      } else if (activeTab.uid) {
+        const item = findItemInCollection(collection, activeTab.uid);
+        if (item) {
+          dispatch(saveRequest(item.uid, collection.uid));
+        }
+      }
+
+      return false;
+    });
+
+    return () => {
+      unbindAction('save');
     };
   }, [activeTabUid, tabs, collections, dispatch, userKeyBindings, keybindingsEnabled]);
 
